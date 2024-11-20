@@ -430,21 +430,18 @@ if __name__ == "__main__":
     # load_spot_with_red_dots()
     # urdf_path = 'spot_description/spot.urdf'
     robot = URDF.load('spot_description/spot.urdf')
-    
-    # marker_positions = [
-    #     [0.42, 0.0, 0.0],  # Front
-    #     [-0.42, 0.0, 0.0],  # Back
-    #     [0.0, 0.11, 0.0],  # Right
-    #     [0.0, -0.11, 0.0]  # Left
-    # ]
-    # robot_meshes = load_robot_from_urdf(urdf_path)
-    # for marker in marker_positions:
-    #     red_markers = create_red_markers([marker], radius = 0.01)
-    #     visualize_robot_with_markers(robot_meshes, red_markers)
     joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
     link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
     trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
-    o3d_meshes = convert_trimesh_to_open3d(trimesh_fk)
-    o3d.visualization.draw_geometries(o3d_meshes)
+    robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+    marker_positions = [
+        [0.42, 0.0, 0.0],  # Front
+        [-0.42, 0.0, 0.0],  # Back
+        [0.0, 0.11, 0.0],  # Right
+        [0.0, -0.11, 0.0]  # Left
+    ]
+    for marker in marker_positions:
+        red_markers = create_red_markers([marker], radius = 0.01)
+        o3d.visualization.draw_geometries(robot_meshes + red_markers)
 
 
