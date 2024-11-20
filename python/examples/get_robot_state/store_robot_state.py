@@ -15,7 +15,7 @@ import bosdyn.client.util
 from bosdyn.client.robot_state import RobotStateClient
 
 
-def main():
+def collect_data(output_path):
     import argparse
 
     commands = {'state', 'hardware', 'metrics'}
@@ -25,6 +25,9 @@ def main():
     parser.add_argument('command', choices=list(commands), help='Command to run')
     options = parser.parse_args()
 
+    dict_dir = '/'.join(output_path.split("/")[:-1])
+    print(f"dict_dir: {dict_dir}")
+
     # Create robot object with an image client.
     sdk = bosdyn.client.create_standard_sdk('RobotStateClient')
     robot = sdk.create_robot(options.hostname)
@@ -32,7 +35,7 @@ def main():
     robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
 
 
-    dict_dir = "data/20241119"
+    # dict_dir = "data/20241120"
     os.makedirs(dict_dir, exist_ok=True)
     # Make a robot state request
     if options.command == 'state':
@@ -46,7 +49,7 @@ def main():
         
         # save data whe press ctrl+c
         except KeyboardInterrupt as e:
-            np.save(os.path.join(dict_dir, "test.npy"), state_dict)
+            np.save(output_path, state_dict)
 
     elif options.command == 'hardware':
         print(robot_state_client.get_hardware_config_with_link_info())
@@ -57,5 +60,7 @@ def main():
 
 
 if __name__ == '__main__':
-    if not main():
-        sys.exit(1)
+    output_path = "data/20241120/test.npy"
+    collect_data(output_path)
+    # if not main(output_path):
+    #     sys.exit(1)

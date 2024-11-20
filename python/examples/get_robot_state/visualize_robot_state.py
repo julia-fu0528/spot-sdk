@@ -1,3 +1,6 @@
+
+import argparse
+from datetime import datetime
 import json
 import numpy as np
 # import pybullet as p
@@ -12,6 +15,8 @@ from collections import defaultdict
 from urdfpy import URDF
 from scipy.spatial import cKDTree
 import open3d as o3d
+from store_robot_state import collect_data
+
 # from pykdl_utils.kdl_kinematics import KDLKinematics
 
 
@@ -124,8 +129,6 @@ def load_spot_with_red_dots():
         mesh = trimesh.util.concatenate([scene.geometry[g] for g in scene.geometry])
     else:
         mesh = scene
-    print(f"Trimesh vertices: {len(mesh.vertices)}")
-    print(f"Trimesh faces: {len(mesh.faces)}")
 
     # Convert Trimesh to Open3D
     o3d_mesh_list = convert_trimesh_to_open3d([mesh])
@@ -133,7 +136,6 @@ def load_spot_with_red_dots():
         raise ValueError("Failed to convert Trimesh to Open3D.")
     # Debug Open3D Mesh
     o3d_mesh = o3d_mesh_list[0]
-    print(o3d_mesh)
 
     # Visualize in Open3D
     # o3d.visualization.draw_geometries([o3d_mesh])
@@ -198,7 +200,6 @@ def load_spot_with_red_dots():
     #     chosen_vertices.extend([sorted_group[idx] for idx in evenly_selected_indices])
 
     chosen_vertices = np.array([[0.5, 0.0, -0.1], [-0.42, 0.0, 0.0], [0.0, 0.11, 0.0], [0.0, -0.11, 0.0]])
-    print(f"chosen_vertices: {len(chosen_vertices.tolist())}")
     robot = URDF.load(os.path.join(folder_path, 'spot_description/spot.urdf'))
     robot_meshes = []
     for link in robot.links:
@@ -223,7 +224,6 @@ def load_spot_with_red_dots():
         sphere.paint_uniform_color([1, 0, 0])  # Red
         sphere.translate(chosen_vertex)
         geometry_list = [sphere] + robot_meshes
-        print(f"geometry_list: {len(geometry_list)}")
         o3d.visualization.draw_geometries(geometry_list)
 
 
@@ -299,7 +299,6 @@ def create_red_markers(marker_positions, radius=0.05):
 
 def visualize_robot_with_markers(robot_meshes, markers):
     """Visualize the robot and red markers using Open3D."""
-    print(f"Robot meshes: {len(robot_meshes)}")
     geometry_list = robot_meshes + markers
     o3d.visualization.draw_geometries(geometry_list)
 
@@ -362,8 +361,6 @@ def compute_forward_kinematics(robot, joint_positions):
 
     # Map each joint to its parent and child link names
     joint_map = {joint.child: joint for joint in robot.joints}
-    for joint in robot.joints:
-        print(f"joint origin: {joint.origin}")
 
     # Recursive function to compute FK for each link
     def compute_transform_for_link(link_name, parent_transform):
@@ -434,14 +431,19 @@ if __name__ == "__main__":
     link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
     trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
     robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
-    marker_positions = [
-        [0.42, 0.0, 0.0],  # Front
-        [-0.42, 0.0, 0.0],  # Back
-        [0.0, 0.11, 0.0],  # Right
-        [0.0, -0.11, 0.0]  # Left
-    ]
-    for marker in marker_positions:
+    marker_positions = {
+        "front": [0.445, 0.0, 0.05],  # Front
+        "back": [-0.42, 0.0, 0.02],  # Back
+        "right": [0.0, 0.11, 0.0],  # Right
+        "left": [0.0, -0.11, 0.0],  # Left
+    }
+    for place, marker in marker_positions.items():
         red_markers = create_red_markers([marker], radius = 0.01)
+        print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
         o3d.visualization.draw_geometries(robot_meshes + red_markers)
+        # get today's date
+        # today = datetime.today().strftime('%Y%m%d')
+        # collect_data(f"data/{today}/{place}.npy")
+        collect_data(f"data/20241120/test.npy")
 
 
