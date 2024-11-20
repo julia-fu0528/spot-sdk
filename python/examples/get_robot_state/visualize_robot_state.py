@@ -10,6 +10,7 @@ import random
 from collections import defaultdict
 from urdfpy import URDF
 from scipy.spatial import cKDTree
+import open3d as o3d
 
 def parse_urdf_joints(urdf_file):
     """Parse joint positions from URDF file."""
@@ -226,6 +227,19 @@ def load_spot_with_red_dots():
         mesh = trimesh.util.concatenate([scene.geometry[g] for g in scene.geometry])
     else:
         mesh = scene
+    print(f"Trimesh vertices: {len(mesh.vertices)}")
+    print(f"Trimesh faces: {len(mesh.faces)}")
+
+    # Convert Trimesh to Open3D
+    o3d_mesh_list = convert_trimesh_to_open3d([mesh])
+    if not o3d_mesh_list:
+        raise ValueError("Failed to convert Trimesh to Open3D.")
+    # Debug Open3D Mesh
+    o3d_mesh = o3d_mesh_list[0]
+    print(o3d_mesh)
+
+    # Visualize in Open3D
+    # o3d.visualization.draw_geometries([o3d_mesh])
     # sampled_points, face_indices = trimesh.sample.sample_surface_even(mesh, count=1000)
     vertices = []
     faces = []
@@ -288,13 +302,93 @@ def load_spot_with_red_dots():
 
     chosen_vertices = np.array([[0.5, 0.0, -0.1], [-0.42, 0.0, 0.0], [0.0, 0.11, 0.0], [0.0, -0.11, 0.0]])
     print(f"chosen_vertices: {len(chosen_vertices.tolist())}")
+    robot = URDF.load(os.path.join(folder_path, 'spot_description/spot.urdf'))
     for chosen_vertex in chosen_vertices.tolist():
         # Add red dots to the selected vertices
-        red_dots = add_red_dots(mesh, [chosen_vertex], updated_path)
+        # red_dots = add_red_dots(mesh, [chosen_vertex], updated_path)
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
+        sphere.compute_vertex_normals()
+        sphere.vertex_colors = o3d.utility.Vector3dVector(np.random.rand(len(mesh.vertices), 3))
+        o3d.visualization.draw_geometries([sphere])
+
+        # sphere.paint_uniform_color([1, 0, 0])  # Red
+        print("hi")
+        sphere.translate(chosen_vertex)
+
+        o3d.visualization.draw_geometries([sphere, robot])
+
 
         # print(f"Updated file written to {updated_path}")
-        robot = URDF.load(os.path.join(folder_path, 'spot_description/spot.urdf'))
-        robot.show()
+        # robot.show()
+
+def convert_trimesh_to_open3d(trimesh_fk):
+        o3d_meshes = []
+        for tm in trimesh_fk:
+            print(f"tm.vertices: {tm.faces}")
+            faces = np.asarray(tm.faces, dtype=np.int32)
+            vertices = np.asarray(tm.vertices, dtype=np.float64)
+
+            # Validate faces
+            if faces.max() >= len(vertices):
+                print("Error: Face indices exceed number of vertices")
+                # Either trim the faces or fix the data
+                valid_faces = faces[faces.max(axis=1) < len(vertices)]
+                faces = valid_faces
+
+            # Create mesh with validated data
+            o3d_mesh = o3d.geometry.TriangleMesh()
+            o3d_mesh.vertices = o3d.utility.Vector3dVector(vertices)
+            o3d_mesh.triangles = o3d.utility.Vector3iVector(faces)
+            o3d_mesh.compute_vertex_normals()
+            try:
+                o3d_mesh.paint_uniform_color(tm.visual.material.main_color[:3] / 255.)
+            except AttributeError:
+                o3d_mesh.vertex_colors = o3d.utility.Vector3dVector(tm.visual.vertex_colors[:, :3] / 255.)
+
+            # o3d_mesh.transform(trimesh_fk[tm])
+            # o3d_mesh.transform(tm)
+            # self.prev_fks.append(trimesh_fk[tm]) # world -> T1
+
+            o3d_meshes.append(o3d_mesh)
+        return o3d_meshes
+
+def urdf_to_open3d(robot, folder_path):
+    """
+    Converts URDF links to Open3D TriangleMesh objects.
+    
+    Args:
+        robot (URDF): Parsed URDF object.
+        folder_path (str): Base path to URDF file and related meshes.
+    
+    Returns:
+        list: List of Open3D geometries representing the URDF.
+    """
+    o3d_objects = []
+    
+    for link in robot.links:
+        for visual in link.visuals:
+            # Get mesh file path
+            if visual.geometry.mesh is not None:
+                mesh_file = os.path.join(folder_path, visual.geometry.mesh.filename)
+                if not os.path.exists(mesh_file):
+                    print(f"Mesh file not found: {mesh_file}")
+                    continue
+                
+                # Load the mesh using Open3D
+                mesh = o3d.io.read_triangle_mesh(mesh_file)
+                mesh.compute_vertex_normals()
+                
+                # Apply visual origin (translation + rotation) if specified
+                if visual.origin is not None:
+                    transform = np.eye(4)
+                    transform[:3, :3] = visual.origin.rotation
+                    transform[:3, 3] = visual.origin.xyz
+                    mesh.transform(transform)
+                
+                # Add the mesh to the list of Open3D objects
+                o3d_objects.append(mesh)
+    
+    return o3d_objects
 
 if __name__ == "__main__":
     # torque_path = "data/20241119/test.npy"
