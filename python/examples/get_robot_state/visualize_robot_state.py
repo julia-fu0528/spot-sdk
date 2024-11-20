@@ -1,5 +1,6 @@
 import json
 import numpy as np
+import pybullet as p
 import matplotlib.pyplot as plt
 import os
 import trimesh
@@ -230,33 +231,21 @@ def load_spot_with_red_dots():
 def convert_trimesh_to_open3d(trimesh_fk):
         o3d_meshes = []
         for tm in trimesh_fk:
-            faces = np.asarray(tm.faces, dtype=np.int32)
-            vertices = np.asarray(tm.vertices, dtype=np.float64)
-
-            # Validate faces
-            if faces.max() >= len(vertices):
-                print("Error: Face indices exceed number of vertices")
-                # Either trim the faces or fix the data
-                valid_faces = faces[faces.max(axis=1) < len(vertices)]
-                faces = valid_faces
-
-            # Create mesh with validated data
-            o3d_mesh = o3d.geometry.TriangleMesh()
-            o3d_mesh.vertices = o3d.utility.Vector3dVector(vertices)
-            o3d_mesh.triangles = o3d.utility.Vector3iVector(faces)
+            o3d_mesh = o3d.geometry.TriangleMesh(
+                vertices=o3d.utility.Vector3dVector(tm.vertices.copy()),
+                triangles=o3d.utility.Vector3iVector(tm.faces.copy())
+            )
             o3d_mesh.compute_vertex_normals()
             try:
                 o3d_mesh.paint_uniform_color(tm.visual.material.main_color[:3] / 255.)
             except AttributeError:
                 o3d_mesh.vertex_colors = o3d.utility.Vector3dVector(tm.visual.vertex_colors[:, :3] / 255.)
 
-            # o3d_mesh.transform(trimesh_fk[tm])
-            # o3d_mesh.transform(tm)
+            o3d_mesh.transform(trimesh_fk[tm])
             # self.prev_fks.append(trimesh_fk[tm]) # world -> T1
 
             o3d_meshes.append(o3d_mesh)
         return o3d_meshes
-
 
 def load_robot_from_urdf(urdf_path):
     """Load robot meshes from a URDF file and convert to Open3D objects."""
@@ -275,7 +264,7 @@ def load_robot_from_urdf(urdf_path):
                         continue
                     
                     # Load the mesh with Open3D
-                    o3d_mesh = o3d.io.read_triangle_mesh(mesh_file)
+                    o3d_mesh = convert_trimesh_to_open3d([trimesh.load(mesh_file, force='mesh')])[0]
                     if o3d_mesh.is_empty():
                         print(f"Failed to load mesh from {mesh_file}")
                         continue
@@ -312,6 +301,70 @@ def visualize_robot_with_markers(robot_meshes, markers):
     geometry_list = robot_meshes + markers
     o3d.visualization.draw_geometries(geometry_list)
 
+def compute_forward_kinematics(robot, joint_positions):
+    """
+    Compute forward kinematics for a robot defined in a URDF file.
+
+    Args:
+        robot (URDF): The loaded URDF object.
+        joint_positions (dict): Dictionary mapping joint names to their positions.
+
+    Returns:
+        dict: A dictionary mapping link names to their FK transformation matrices.
+    """
+    # Initialize the base transform as the identity matrix
+    base_transform = np.eye(4)
+    link_transforms = {robot.base_link.name: base_transform}
+
+    # Map each joint to its parent and child link names
+    joint_map = {joint.child: joint for joint in robot.joints}
+
+    # Recursive function to compute FK for each link
+    def compute_transform_for_link(link_name, parent_transform):
+        if link_name in joint_map:
+            # Get the joint connecting to this link
+            joint = joint_map[link_name]
+            joint_position = joint_positions.get(joint.name, 0.0)
+            # Compute the joint transformation
+            joint_transform = joint.get_transform(joint_position)
+            current_transform = parent_transform @ joint_transform
+        else:
+            # This is the base link or a link with no parent joint
+            current_transform = parent_transform
+
+        # Store the transform for the current link
+        link_transforms[link_name] = current_transform
+
+        # Find child links connected via joints
+        for joint in robot.joints:
+            if joint.parent == link_name:
+                compute_transform_for_link(joint.child, current_transform)
+
+    # Start computation from the base link
+    compute_transform_for_link(robot.base_link.name, base_transform)
+
+    return link_transforms
+
+def prepare_trimesh_fk(robot, link_fk_transforms):
+    """
+    Prepare trimesh objects and their transforms for convert_trimesh_to_open3d.
+    Returns a dictionary with trimesh objects as keys and FK transforms as values.
+    """
+    trimesh_fk = {}
+
+    for link in robot.links:
+        for visual in link.visuals:
+            if visual.geometry.mesh:
+                # Load the mesh
+                mesh_file = visual.geometry.mesh.filename
+                mesh = trimesh.load(mesh_file)
+
+                # Assign the FK transform
+                transform = link_fk_transforms[link]
+                trimesh_fk[mesh] = transform
+
+    return trimesh_fk
+
 if __name__ == "__main__":
     # torque_path = "data/20241119/test.npy"
     # vis_joint_torques(torque_path)
@@ -321,29 +374,23 @@ if __name__ == "__main__":
 
 
     # load_spot_with_red_dots()
-    urdf_path = 'spot_description/spot.urdf'
+    # urdf_path = 'spot_description/spot.urdf'
     robot = URDF.load('spot_description/spot.urdf')
     
-    marker_positions = [
-        [0.42, 0.0, 0.0],  # Front
-        [-0.42, 0.0, 0.0],  # Back
-        [0.0, 0.11, 0.0],  # Right
-        [0.0, -0.11, 0.0]  # Left
-    ]
-
-    # Load the robot meshes from the URDF
-    robot_meshes = load_robot_from_urdf(urdf_path)
-    # robot_meshes = urdf_to_open3d(robot, 'spot_description')
-
-    # Create red markers at specified positions
-    for marker in marker_positions:
-        red_markers = create_red_markers([marker], radius = 0.01)
-
-        # Visualize the robot with the markers
-        visualize_robot_with_markers(robot_meshes, red_markers)
-
-    # scene_path = 'spot_description/meshes/base/visual/body.obj'
-    # vertex_indices = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]  # Replace with desired indices
-
+    # marker_positions = [
+    #     [0.42, 0.0, 0.0],  # Front
+    #     [-0.42, 0.0, 0.0],  # Back
+    #     [0.0, 0.11, 0.0],  # Right
+    #     [0.0, -0.11, 0.0]  # Left
+    # ]
+    # robot_meshes = load_robot_from_urdf(urdf_path)
+    # for marker in marker_positions:
+    #     red_markers = create_red_markers([marker], radius = 0.01)
+    #     visualize_robot_with_markers(robot_meshes, red_markers)
+    joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
+    link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
+    trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
+    o3d_meshes = convert_trimesh_to_open3d(trimesh_fk)
+    o3d.visualization.draw_geometries(o3d_meshes)
 
 
