@@ -293,8 +293,8 @@ def load_spot_with_red_dots():
         red_dots = add_red_dots(mesh, [chosen_vertex], updated_path)
 
         # print(f"Updated file written to {updated_path}")
-        # robot = URDF.load(os.path.join(folder_path, 'spot_description/spot.urdf'))
-        # robot.show()
+        robot = URDF.load(os.path.join(folder_path, 'spot_description/spot.urdf'))
+        robot.show()
 
 if __name__ == "__main__":
     # torque_path = "data/20241119/test.npy"
