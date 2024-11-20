@@ -15,7 +15,6 @@ from collections import defaultdict
 from urdfpy import URDF
 from scipy.spatial import cKDTree
 import open3d as o3d
-from store_robot_state import collect_data
 
 # from pykdl_utils.kdl_kinematics import KDLKinematics
 
@@ -444,6 +443,6 @@ if __name__ == "__main__":
         # get today's date
         # today = datetime.today().strftime('%Y%m%d')
         # collect_data(f"data/{today}/{place}.npy")
-        collect_data(f"data/20241120/test.npy")
+        # collect_data(f"data/20241120/test.npy")
 
 
