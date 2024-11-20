@@ -1,6 +1,6 @@
 import json
 import numpy as np
-import pybullet as p
+# import pybullet as p
 import matplotlib.pyplot as plt
 import os
 import trimesh
@@ -12,6 +12,8 @@ from collections import defaultdict
 from urdfpy import URDF
 from scipy.spatial import cKDTree
 import open3d as o3d
+# from pykdl_utils.kdl_kinematics import KDLKinematics
+
 
 def vis_joint_torques(torque_path):
     # load the npy data
@@ -301,6 +303,48 @@ def visualize_robot_with_markers(robot_meshes, markers):
     geometry_list = robot_meshes + markers
     o3d.visualization.draw_geometries(geometry_list)
 
+def compute_joint_transform(joint, joint_position):
+    """
+    Compute the transformation matrix for a given joint and its position.
+
+    Args:
+        joint (urdfpy.Joint): The joint object.
+        joint_position (float): The position of the joint (angle for revolute, displacement for prismatic).
+
+    Returns:
+        np.ndarray: The 4x4 transformation matrix.
+    """
+    transform = np.eye(4)  # Initialize as identity matrix
+
+    # Apply the fixed transform from the joint's origin (if defined)
+    if joint.origin is not None:
+        origin_transform = np.eye(4)
+        origin_transform = joint.origin
+        # origin_transform[:3, :3] = joint.origin.rotation  # Rotation matrix from origin
+        # origin_transform[:3, 3] = joint.origin.xyz        # Translation vector from origin
+        transform = transform @ origin_transform
+
+    # Compute joint-specific transformation
+    if joint.joint_type in ["revolute", "continuous"]:
+        # Rotation about the joint axis
+        axis = np.array(joint.axis)
+        angle = joint_position
+        rotation_transform = trimesh.transformations.rotation_matrix(angle, axis)
+        transform = transform @ rotation_transform
+    elif joint.joint_type == "prismatic":
+        # Translation along the joint axis
+        axis = np.array(joint.axis)
+        translation_transform = np.eye(4)
+        translation_transform[:3, 3] = axis * joint_position
+        transform = transform @ translation_transform
+    elif joint.joint_type == "fixed":
+        # No additional transformation for fixed joints
+        pass
+    else:
+        raise ValueError(f"Unsupported joint type: {joint.joint_type}")
+
+    return transform
+
 def compute_forward_kinematics(robot, joint_positions):
     """
     Compute forward kinematics for a robot defined in a URDF file.
@@ -318,6 +362,8 @@ def compute_forward_kinematics(robot, joint_positions):
 
     # Map each joint to its parent and child link names
     joint_map = {joint.child: joint for joint in robot.joints}
+    for joint in robot.joints:
+        print(f"joint origin: {joint.origin}")
 
     # Recursive function to compute FK for each link
     def compute_transform_for_link(link_name, parent_transform):
@@ -326,7 +372,8 @@ def compute_forward_kinematics(robot, joint_positions):
             joint = joint_map[link_name]
             joint_position = joint_positions.get(joint.name, 0.0)
             # Compute the joint transformation
-            joint_transform = joint.get_transform(joint_position)
+            # joint_transform = joint.get_transform(joint_position)
+            joint_transform = compute_joint_transform(joint, joint_position)
             current_transform = parent_transform @ joint_transform
         else:
             # This is the base link or a link with no parent joint
@@ -351,16 +398,23 @@ def prepare_trimesh_fk(robot, link_fk_transforms):
     Returns a dictionary with trimesh objects as keys and FK transforms as values.
     """
     trimesh_fk = {}
+    folder_path = Path(__file__).parent
 
     for link in robot.links:
         for visual in link.visuals:
             if visual.geometry.mesh:
                 # Load the mesh
                 mesh_file = visual.geometry.mesh.filename
-                mesh = trimesh.load(mesh_file)
+                mesh = trimesh.load(os.path.join(folder_path, 'spot_description', mesh_file), force='mesh')
+                if hasattr(mesh.visual, 'material'):
+                    mesh.visual.material.alpha = 1.0  # Fully opaque
 
+                # Convert to opaque vertex colors if no material
+                if hasattr(mesh.visual, 'to_color'):
+                    mesh.visual = mesh.visual.to_color()
+                    mesh.visual.vertex_colors[:, 3] = 255  # Fully opaque
                 # Assign the FK transform
-                transform = link_fk_transforms[link]
+                transform = link_fk_transforms[link.name]
                 trimesh_fk[mesh] = transform
 
     return trimesh_fk
