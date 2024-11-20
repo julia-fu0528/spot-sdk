@@ -12,112 +12,6 @@ from urdfpy import URDF
 from scipy.spatial import cKDTree
 import open3d as o3d
 
-def parse_urdf_joints(urdf_file):
-    """Parse joint positions from URDF file."""
-    tree = ET.parse(urdf_file)
-    root = tree.getroot()
-
-    joint_info = {}
-    for joint in root.findall('joint'):
-        joint_name = joint.get('name')
-        origin = joint.find('origin')
-        parent = joint.find('parent').get('link')
-        child = joint.find('child').get('link')
-        
-        if origin is not None:
-            xyz = origin.get('xyz')
-            if xyz:
-                x, y, z = map(float, xyz.split())
-                joint_info[joint_name] = {
-                    'position': np.array([x, y, z]),
-                    'parent': parent,
-                    'child': child
-                }
-    return joint_info
-
-
-
-def get_joint_positions(urdf_file):
-    tree = ET.parse(urdf_file)
-    root = tree.getroot()
-
-    joint_positions = {}
-    for joint in root.findall('joint'):
-        joint_name = joint.get('name')
-        origin = joint.find('origin')
-        if origin is not None:
-            xyz = origin.get('xyz')
-            if xyz:
-                x, y, z = map(float, xyz.split())
-                joint_positions[joint_name] = (x, y, z)
-
-    # Print results
-    for joint_name, (x, y, z) in joint_positions.items():
-        print(f"{joint_name}: x={x}, y={y}, z={z}")
-    
-    return joint_positions
-
-def find_closest_vertices(scene_path, joint_positions):
-    # Load the OBJ file, which may be a Scene
-    scene = trimesh.load(scene_path)
-    
-    # If it's a Mesh (not a Scene), wrap it in a dictionary for consistency
-    if isinstance(scene, trimesh.Trimesh):
-        scene = {'mesh': scene}
-
-    closest_vertices = {}
-
-    # For each joint, find the closest vertex in any mesh of the scene
-    for joint_name, joint_position in joint_positions.items():
-        min_distance = float('inf')
-        closest_vertex = None
-
-        # Iterate over all meshes in the scene
-        for name, mesh in scene.geometry.items():
-            # Compute the distance from the joint to each vertex in this mesh
-            distances = np.linalg.norm(mesh.vertices - joint_position, axis=1)
-            # Find the closest vertex in this mesh
-            closest_vertex_idx = np.argmin(distances)
-            closest_vertex_in_mesh = mesh.vertices[closest_vertex_idx]
-            closest_distance_in_mesh = distances[closest_vertex_idx]
-
-            # Check if this is the closest vertex overall
-            if closest_distance_in_mesh < min_distance:
-                min_distance = closest_distance_in_mesh
-                closest_vertex = closest_vertex_in_mesh
-
-        closest_vertices[joint_name] = closest_vertex
-
-    return closest_vertices
-
-def set_vertex_color_red(scene_path, closest_vertices):
-    # Load the OBJ file, which may be a Scene
-    scene = trimesh.load(scene_path)
-
-    # If it's a Mesh (not a Scene), wrap it in a dictionary for consistency
-    if isinstance(scene, trimesh.Trimesh):
-        scene = {'mesh': scene}
-
-    # Iterate over each mesh in the scene
-    for mesh_name, mesh in scene.geometry.items():
-        # Ensure vertex colors are available
-        if not hasattr(mesh.visual, 'vertex_colors'):
-            # Convert TextureVisuals to ColorVisuals by assigning white color to all vertices
-            mesh.visual = mesh.visual.to_color()
-            mesh.visual.vertex_colors = np.ones((len(mesh.vertices), 4), dtype=np.uint8) * 255  # white (RGBA)
-
-        # Find and set color for each closest vertex
-        for joint_name, closest_vertex in closest_vertices.items():
-            # Calculate distances from all vertices to the closest vertex
-            distances = np.linalg.norm(mesh.vertices - closest_vertex, axis=1)
-            # Find the index of the closest vertex in this mesh
-            closest_vertex_idx = np.argmin(distances)
-
-            # Set the color of this vertex to red (RGBA: [255, 0, 0, 255])
-            mesh.visual.vertex_colors[closest_vertex_idx] = [255, 0, 0, 255]
-    trimesh.viewer.SceneViewer(scene)
-    return scene
-
 def vis_joint_torques(torque_path):
     # load the npy data
     # torque_path = "data/touch_back.npy"
@@ -303,19 +197,31 @@ def load_spot_with_red_dots():
     chosen_vertices = np.array([[0.5, 0.0, -0.1], [-0.42, 0.0, 0.0], [0.0, 0.11, 0.0], [0.0, -0.11, 0.0]])
     print(f"chosen_vertices: {len(chosen_vertices.tolist())}")
     robot = URDF.load(os.path.join(folder_path, 'spot_description/spot.urdf'))
+    robot_meshes = []
+    for link in robot.links:
+        if link.visuals:
+            for visual in link.visuals:
+                if visual.geometry.mesh is not None:
+                    # Load the mesh file (e.g., STL or OBJ)
+                    mesh_path = os.path.join(folder_path, "spot_description", visual.geometry.mesh.filename)
+                    o3d_mesh = convert_trimesh_to_open3d([trimesh.load(mesh_path, force='mesh')])[0]
+                    if o3d_mesh== []:
+                        print(f"Failed to load mesh from {mesh_path}")
+                        continue
+                    o3d_mesh.compute_vertex_normals()
+                    robot_meshes.append(o3d_mesh)
+    o3d.visualization.draw_geometries(robot_meshes)
     for chosen_vertex in chosen_vertices.tolist():
         # Add red dots to the selected vertices
         # red_dots = add_red_dots(mesh, [chosen_vertex], updated_path)
         sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
         sphere.compute_vertex_normals()
-        sphere.vertex_colors = o3d.utility.Vector3dVector(np.random.rand(len(mesh.vertices), 3))
-        o3d.visualization.draw_geometries([sphere])
 
-        # sphere.paint_uniform_color([1, 0, 0])  # Red
-        print("hi")
+        sphere.paint_uniform_color([1, 0, 0])  # Red
         sphere.translate(chosen_vertex)
-
-        o3d.visualization.draw_geometries([sphere, robot])
+        geometry_list = [sphere] + robot_meshes
+        print(f"geometry_list: {len(geometry_list)}")
+        o3d.visualization.draw_geometries(geometry_list)
 
 
         # print(f"Updated file written to {updated_path}")
@@ -324,7 +230,6 @@ def load_spot_with_red_dots():
 def convert_trimesh_to_open3d(trimesh_fk):
         o3d_meshes = []
         for tm in trimesh_fk:
-            print(f"tm.vertices: {tm.faces}")
             faces = np.asarray(tm.faces, dtype=np.int32)
             vertices = np.asarray(tm.vertices, dtype=np.float64)
 
@@ -352,43 +257,60 @@ def convert_trimesh_to_open3d(trimesh_fk):
             o3d_meshes.append(o3d_mesh)
         return o3d_meshes
 
-def urdf_to_open3d(robot, folder_path):
-    """
-    Converts URDF links to Open3D TriangleMesh objects.
-    
-    Args:
-        robot (URDF): Parsed URDF object.
-        folder_path (str): Base path to URDF file and related meshes.
-    
-    Returns:
-        list: List of Open3D geometries representing the URDF.
-    """
-    o3d_objects = []
-    
+
+def load_robot_from_urdf(urdf_path):
+    """Load robot meshes from a URDF file and convert to Open3D objects."""
+    robot = URDF.load(urdf_path)
+    robot_meshes = []
+
+    # Convert URDF links to Open3D meshes
     for link in robot.links:
-        for visual in link.visuals:
-            # Get mesh file path
-            if visual.geometry.mesh is not None:
-                mesh_file = os.path.join(folder_path, visual.geometry.mesh.filename)
-                if not os.path.exists(mesh_file):
-                    print(f"Mesh file not found: {mesh_file}")
-                    continue
-                
-                # Load the mesh using Open3D
-                mesh = o3d.io.read_triangle_mesh(mesh_file)
-                mesh.compute_vertex_normals()
-                
-                # Apply visual origin (translation + rotation) if specified
-                if visual.origin is not None:
-                    transform = np.eye(4)
-                    transform[:3, :3] = visual.origin.rotation
-                    transform[:3, 3] = visual.origin.xyz
-                    mesh.transform(transform)
-                
-                # Add the mesh to the list of Open3D objects
-                o3d_objects.append(mesh)
+        if link.visuals:
+            for visual in link.visuals:
+                if visual.geometry.mesh is not None:
+                    # Resolve the path to the mesh file
+                    mesh_file = os.path.join(os.path.dirname(urdf_path), visual.geometry.mesh.filename)
+                    if not os.path.exists(mesh_file):
+                        print(f"Mesh file not found: {mesh_file}")
+                        continue
+                    
+                    # Load the mesh with Open3D
+                    o3d_mesh = o3d.io.read_triangle_mesh(mesh_file)
+                    if o3d_mesh.is_empty():
+                        print(f"Failed to load mesh from {mesh_file}")
+                        continue
+                    
+                    o3d_mesh.compute_vertex_normals()
+                    
+                    # Apply transformation if origin is defined
+                    # if visual.origin is not None:
+                    #     transform = np.eye(4)
+                    #     transform[:3, :3] = visual.origin.rotation
+                    #     transform[:3, 3] = visual.origin.xyz
+                    #     o3d_mesh.transform(transform)
+                    
+                    robot_meshes.append(o3d_mesh)
     
-    return o3d_objects
+    return robot_meshes
+
+
+def create_red_markers(marker_positions, radius=0.05):
+    """Create red spheres as markers at specified positions."""
+    red_markers = []
+    for pos in marker_positions:
+        # Create a sphere and set its position
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+        sphere.paint_uniform_color([1, 0, 0])  # Red color
+        sphere.translate(pos)
+        red_markers.append(sphere)
+    return red_markers
+
+
+def visualize_robot_with_markers(robot_meshes, markers):
+    """Visualize the robot and red markers using Open3D."""
+    print(f"Robot meshes: {len(robot_meshes)}")
+    geometry_list = robot_meshes + markers
+    o3d.visualization.draw_geometries(geometry_list)
 
 if __name__ == "__main__":
     # torque_path = "data/20241119/test.npy"
@@ -398,23 +320,30 @@ if __name__ == "__main__":
     # get_joint_positions(urdf_path)
 
 
-    load_spot_with_red_dots()
+    # load_spot_with_red_dots()
+    urdf_path = 'spot_description/spot.urdf'
+    robot = URDF.load('spot_description/spot.urdf')
+    
+    marker_positions = [
+        [0.42, 0.0, 0.0],  # Front
+        [-0.42, 0.0, 0.0],  # Back
+        [0.0, 0.11, 0.0],  # Right
+        [0.0, -0.11, 0.0]  # Left
+    ]
+
+    # Load the robot meshes from the URDF
+    robot_meshes = load_robot_from_urdf(urdf_path)
+    # robot_meshes = urdf_to_open3d(robot, 'spot_description')
+
+    # Create red markers at specified positions
+    for marker in marker_positions:
+        red_markers = create_red_markers([marker], radius = 0.01)
+
+        # Visualize the robot with the markers
+        visualize_robot_with_markers(robot_meshes, red_markers)
+
     # scene_path = 'spot_description/meshes/base/visual/body.obj'
     # vertex_indices = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]  # Replace with desired indices
 
 
 
-    # # load_spot_with_red_dots(joint_names_to_highlight)
-    # urdf_path = 'spot_description/spot.urdf'
-    # mesh_path = 'spot_description/meshes/base/visual/body.obj'
-
-    # # Get joint positions from the URDF
-    # joint_positions = get_joint_positions(urdf_path)
-    # # Find the closest vertices on the mesh for each joint position
-    # closest_vertices = find_closest_vertices(mesh_path, joint_positions)
-    # scene_with_red_vertices = set_vertex_color_red(mesh_path, closest_vertices)
-    # scene_with_red_vertices.export('modified_body.obj')
-
-    # # Print the closest vertices for each joint
-    # for joint_name, vertex in closest_vertices.items():
-    #     print(f"Joint: {joint_name}, Closest Vertex: {vertex}")
