@@ -17,9 +17,7 @@ from scipy.spatial import cKDTree
 import open3d as o3d
 
 # from pykdl_utils.kdl_kinematics import KDLKinematics
-
-
-def vis_joint_torques(torque_path):
+def load_joint_torques(torque_path):
     # load the npy data
     # torque_path = "data/touch_back.npy"
     state = np.load(torque_path, allow_pickle=True)
@@ -52,6 +50,13 @@ def vis_joint_torques(torque_path):
             torque_data[i, j] = joint['load']
             if i == 0:
                 joint_names.append(joint['name'])
+    # print(f"torque dict:{torque_dict}")
+    print(f"torque data:{torque_data.shape}")
+    return torque_data, num_entries, num_joints, joint_names
+
+
+def vis_joint_torques(torque_path):
+    torque_data, num_entries, num_joints, joint_names = load_joint_torques(torque_path)
 
     # Create the plot
     plt.figure(figsize=(10, 6))
@@ -416,8 +421,8 @@ def prepare_trimesh_fk(robot, link_fk_transforms):
     return trimesh_fk
 
 if __name__ == "__main__":
-    # torque_path = "data/20241119/test.npy"
-    # vis_joint_torques(torque_path)
+    torque_path = "data/20241120/test.npy"
+    vis_joint_torques(torque_path)
     # urdf_path = 'spot_description/spot.urdf'
     # # joint_locations = get_joint_locations(urdf_path)
     # get_joint_positions(urdf_path)
@@ -425,24 +430,26 @@ if __name__ == "__main__":
 
     # load_spot_with_red_dots()
     # urdf_path = 'spot_description/spot.urdf'
-    robot = URDF.load('spot_description/spot.urdf')
-    joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
-    link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
-    trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
-    robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
-    marker_positions = {
-        "front": [0.445, 0.0, 0.05],  # Front
-        "back": [-0.42, 0.0, 0.02],  # Back
-        "right": [0.0, 0.11, 0.0],  # Right
-        "left": [0.0, -0.11, 0.0],  # Left
-    }
-    for place, marker in marker_positions.items():
-        red_markers = create_red_markers([marker], radius = 0.01)
-        print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
-        o3d.visualization.draw_geometries(robot_meshes + red_markers)
-        # get today's date
-        # today = datetime.today().strftime('%Y%m%d')
-        # collect_data(f"data/{today}/{place}.npy")
-        # collect_data(f"data/20241120/test.npy")
+
+
+    # robot = URDF.load('spot_description/spot.urdf')
+    # joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
+    # link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
+    # trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
+    # robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+    # marker_positions = {
+    #     "front": [0.445, 0.0, 0.05],  # Front
+    #     "back": [-0.42, 0.0, 0.02],  # Back
+    #     "right": [0.0, 0.11, 0.0],  # Right
+    #     "left": [0.0, -0.11, 0.0],  # Left
+    # }
+    # for place, marker in marker_positions.items():
+    #     red_markers = create_red_markers([marker], radius = 0.01)
+    #     print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
+    #     o3d.visualization.draw_geometries(robot_meshes + red_markers)
+    #     # get today's date
+    #     # today = datetime.today().strftime('%Y%m%d')
+    #     # collect_data(f"data/{today}/{place}.npy")
+    #     # collect_data(f"data/20241120/test.npy")
 
 

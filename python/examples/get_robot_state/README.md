@@ -27,3 +27,10 @@ python3 get_robot_state.py ROBOT_IP {state, hardware, metrics}
 ```
 
 As well, the program requires one of `{state, hardware, metrics}` as a command line argument to specify which robot state request to issue when running the example program.
+
+
+
+
+```
+pip install tensorflow
+```
