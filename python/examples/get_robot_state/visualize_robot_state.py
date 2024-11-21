@@ -15,6 +15,7 @@ from collections import defaultdict
 from urdfpy import URDF
 from scipy.spatial import cKDTree
 import open3d as o3d
+from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 
 # from pykdl_utils.kdl_kinematics import KDLKinematics
 def load_joint_torques(torque_path):
@@ -294,6 +295,7 @@ def create_red_markers(marker_positions, radius=0.05):
     red_markers = []
     for pos in marker_positions:
         # Create a sphere and set its position
+        print(f"radius: {radius}")
         sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
         sphere.paint_uniform_color([1, 0, 0])  # Red color
         sphere.translate(pos)
@@ -419,6 +421,30 @@ def prepare_trimesh_fk(robot, link_fk_transforms):
                 trimesh_fk[mesh] = transform
 
     return trimesh_fk
+
+def visualize_robot_with_markers(robot_meshes, marker_positions):
+    """
+    Visualize the robot with markers, showing each marker from the appropriate viewing angle
+    
+    Args:
+        robot_meshes (list): List of Open3D meshes for the robot
+        marker_positions (dict): Dictionary of marker positions keyed by location name
+    """
+    for place, position in marker_positions.items():
+        # Create marker for current position
+        marker = create_red_markers([position], radius=1.0)[0]
+        
+        # Create camera parameters facing the marker
+        camera_params = create_viewing_parameters(position)
+        
+        # Combine geometries
+        geometries = robot_meshes + [marker]
+        
+        print(f"Viewing {place} marker. Press Ctrl+C in terminal to proceed to next view.")
+        
+        # Visualize with specific camera view
+        visualize_with_camera(geometries, camera_params)
+
 
 if __name__ == "__main__":
     torque_path = "data/20241120/test.npy"

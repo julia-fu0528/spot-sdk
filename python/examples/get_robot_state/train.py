@@ -1,9 +1,11 @@
+from datetime import datetime
 import os
 import random
 import sys
 from pathlib import Path
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.manifold import TSNE
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten
@@ -12,6 +14,11 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.layers import Lambda
 
+from sklearn.metrics import confusion_matrix
+
+
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from visualize_robot_state import load_joint_torques, vis_joint_torques
 
@@ -83,7 +90,7 @@ def create_model(input_shape, num_classes):
     return model
     
 
-def train(X_train, X_val, y_train, y_val, model_path, best_model_path):
+def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
     # Create the model
     input_shape = X_train.shape[1:]  # Shape of a single input sample
     num_classes = len(classes)       # Number of output classes
@@ -97,6 +104,17 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path):
         metrics=['accuracy']
     )
     
+
+    # Create TensorBoard callback with timestamped log directory
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(
+        log_dir=os.path.join(log_dir, datetime.now().strftime("%Y%m%d-%H%M%S")),
+        histogram_freq=1,  # Generate histogram visualizations for layer weights every epoch
+        write_graph=True,  # Visualize the model graph
+        write_images=True,  # Visualize layer activations
+        update_freq='epoch',  # Update logs at the end of each epoch
+        profile_batch='500,520'  # Profile performance for batches 500 to 520
+    )
+
     print(f"X_train.shape: {X_train.shape}, y_train.shape: {y_train.shape}")
     print(f"X_val.shape: {X_val.shape}, y_val.shape: {y_val.shape}")
     # Train the model
@@ -106,8 +124,13 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path):
         epochs=50,                     # Number of epochs
         batch_size=32,                 # Batch size
         callbacks=[
+            tensorboard_callback,
             tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True),
-            tf.keras.callbacks.ModelCheckpoint(best_model_path, save_best_only=True)
+            tf.keras.callbacks.ModelCheckpoint(
+                best_model_path, 
+                save_best_only=True,
+                monitor='val_loss'
+            )
         ]
     )
     # Save the trained model
@@ -128,13 +151,98 @@ def predict(model_path, classes):
     predicted_class = classes[np.argmax(predictions)]
 
 
+def plot_confusion_matrix(model, X_val, y_val, classes, save_path=None):
+    """
+    Plot and optionally save confusion matrix
+    """
+    # Get predictions
+    y_pred = model.predict(X_val)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    y_true_classes = np.argmax(y_val, axis=1)
+    
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true_classes, y_pred_classes)
+    
+    # Create figure and plot
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=classes,
+                yticklabels=classes)
+    plt.title('Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    
+    # Save if path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Confusion matrix saved to {save_path}")
+    
+    # Show the plot
+    plt.show()
+
+def plot_tsne(X, y, classes, save_path=None):
+    """
+    Create and save t-SNE visualization of the data
+    
+    Args:
+        X: Input features
+        y: One-hot encoded labels
+        classes: List of class names
+        save_path: Optional path to save the plot
+    """
+    # Convert one-hot encoded labels back to class indices
+    y_classes = np.argmax(y, axis=1)
+    
+    # Perform t-SNE
+    print("Performing t-SNE dimensionality reduction...")
+    tsne = TSNE(n_components=2, random_state=42, perplexity=30, n_iter=1000)
+    X_tsne = tsne.fit_transform(X)
+    
+    # Create figure
+    plt.figure(figsize=(12, 8))
+    
+    # Create scatter plot
+    scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], 
+                         c=y_classes, 
+                         cmap='tab10',
+                         alpha=0.6)
+    
+    # Add legend
+    legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
+                                 markerfacecolor=plt.cm.tab10(i/10), 
+                                 label=classes[i], markersize=10)
+                      for i in range(len(classes))]
+    plt.legend(handles=legend_elements, title="Classes")
+    
+    # Add labels and title
+    plt.xlabel('t-SNE Component 1')
+    plt.ylabel('t-SNE Component 2')
+    plt.title('t-SNE Visualization of Data')
+    
+    # Save if path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"t-SNE plot saved to {save_path}")
+    
+    # Show the plot
+    plt.show()
+
+
 if __name__ == "__main__":
     # Path to the directory containing `.npy` files
     # current folder path 
     folder_path =  Path(__file__).parent
     torque_dir = os.path.join(folder_path, "data/20241120")
     model_dir = os.path.join(folder_path, "model")
+    log_dir = os.path.join(folder_path, "logs")
+    plots_dir = os.path.join(folder_path, "plots")  # New directory for plots
+
+
     os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
+
+
     model_path = os.path.join(model_dir, "5_class_model.keras")
     best_model_path = os.path.join(model_dir, 'best_model.keras')
 
@@ -142,9 +250,17 @@ if __name__ == "__main__":
     classes = ['no_contact', 'front', 'back', 'left', 'right']  # Define your classes
     X_train, X_val, y_train, y_val = preprocess(torque_dir, classes)
 
-    model, history = train(X_train, X_val, y_train, y_val, model_path, best_model_path)
+     # Create t-SNE visualization before training
+    print("Creating t-SNE visualization of training data...")
+    tsne_path = os.path.join(plots_dir, 'tsne_visualization.png')
+    plot_tsne(X_train, y_train, classes, save_path=tsne_path)
+
+    model, history = train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir)
     
     # Evaluate the model on validation set
     val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=0)
     print(f"Validation Accuracy: {val_accuracy:.2f}")
     # predict(model_path, classes)
+
+    confusion_matrix_path = os.path.join(plots_dir, f'confusion_matrix.png')
+    plot_confusion_matrix(model, X_val, y_val, classes, save_path=confusion_matrix_path)
