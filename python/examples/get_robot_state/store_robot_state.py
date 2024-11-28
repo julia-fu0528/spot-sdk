@@ -16,9 +16,11 @@ import bosdyn.client.util
 from bosdyn.client.robot_state import RobotStateClient
 from urdfpy import URDF
 import open3d as o3d
+import random
 
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
-from visualize_robot_state import compute_forward_kinematics, prepare_trimesh_fk, convert_trimesh_to_open3d, create_red_markers, visualize_robot_with_markers
+from visualize_robot_state import add_red_dots, compute_forward_kinematics, prepare_trimesh_fk, \
+convert_trimesh_to_open3d, create_red_markers, visualize_robot_with_markers, combine_meshes_o3d
 
 
 def collect_data(output_path, hostname, command):
@@ -75,12 +77,26 @@ def main(output_path):
     link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
     trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
     robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
-    marker_positions = {
-        "front": [0.445, 0.0, 0.05],  # Front
-        "back": [-0.42, 0.0, 0.05],  # Back
-        "left": [0.0, 0.11, 0.0],    # Left
-        "right": [0.0, -0.11, 0.0],  # Right
-    }
+    # combined_robot_mesh = combine_meshes_o3d(robot_meshes)
+    print(f"Got combined mesh\n")
+    # marker_positions = {
+    #     "front": [0.445, 0.0, 0.05],  # Front
+    #     "back": [-0.42, 0.0, 0.05],  # Back
+    #     "left": [0.0, 0.11, 0.0],    # Left
+    #     "right": [0.0, -0.11, 0.0],  # Right
+    # }
+    # evenly pick 30 positions with z = 0.08, x in [-0.8, 0.8], y in [-0.15, 0.15]
+    top_markers_pos = np.array([[random.uniform(-0.5, 0.2), random.uniform(-0.1, 0.1), 0.075] for _ in range(40)])
+    front_markers_pos = np.array([[random.uniform(0.4, 0.445), random.uniform(-0.13, 0.13), random.uniform(-0.07, 0.08)] for _ in range(10)])
+    back_markers_pos = np.array([[-0.42, random.uniform(-0.13, 0.13), random.uniform(-0.07, 0.08)] for _ in range(10)])
+    left_markers_pos = np.array([[random.uniform(-0.22, 0.22), 0.11, random.uniform(-0.07,0.08)] for _ in range(20)])
+    right_markers_pos = np.array([[random.uniform(-0.22, 0.22), -0.11, random.uniform(-0.07, 0.08)] for _ in range(20)])
+    combined_pos = np.concatenate([top_markers_pos, front_markers_pos, back_markers_pos, left_markers_pos, right_markers_pos])
+    # top_markers = create_red_markers(top_markers_pos, radius = 0.01)
+    markers = add_red_dots(robot_meshes[0], 100, radius = 0.01)
+    print(f"Total number of markers: {len(markers)}")
+    o3d.visualization.draw_geometries(robot_meshes + markers)
+    sys.exit(0)
     # for place, marker in marker_positions.items():
     #     red_markers = create_red_markers([marker], radius = 0.01)
     #     print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")

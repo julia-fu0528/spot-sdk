@@ -1,5 +1,6 @@
 
 import argparse
+import sys
 from datetime import datetime
 import json
 import numpy as np
@@ -85,34 +86,90 @@ def load_spot():
     robot = URDF.load('spot_description/spot.urdf')
     robot.show()
 
-def add_red_dots(mesh, vertices, output_path, dot_radius=0.01):
-    print(f"Number of input coordinates: {len(vertices)}")
-    mesh_vertices = np.array(mesh.vertices)
 
-    tree = cKDTree(mesh_vertices)
-    distances, closest_indices = tree.query(vertices)
+def create_red_markers(marker_positions, radius=0.01):
+    """Create red spheres as markers at specified positions."""
+    red_markers = []
+    for pos in marker_positions:
+        # Create a sphere and set its position
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+        sphere.paint_uniform_color([1, 0, 0])  # Red color
+        sphere.translate(pos)
+        red_markers.append(sphere)
+    return red_markers
 
-    print(f"Closest mesh vertices found for input coordinates: {len(closest_indices)}")
 
-    red_dots = []
-    for index in closest_indices:
-        vertex = mesh_vertices[index]
-        sphere = trimesh.creation.icosphere(subdivisions=2, radius=dot_radius)
-        sphere.visual.vertex_colors = [255, 0, 0, 255]  # Red in RGBA
-        # sphere.visual.material = red_material
+# def add_red_dots(mesh, positions, radius=0.01, output_path=None):
+def add_red_dots(mesh, num_samples, radius=0.01, output_path=None):
+    ## OPEN3D NEAREST NEIGHBOR
+    ## OPEN3D POINTCLOUD SAMPLING: RANDOM SAMPLING/POISSON DISK SAMPLING (BETTER)
+    ## STORE JOINT ANGLES(POSE) IN ADDITION TO JOINT TORQUE
+    ## REAL-TIME PREDICTION
+    point_cloud = mesh.sample_points_poisson_disk(number_of_points=num_samples)
+    # point_cloud = mesh.sample_points_poisson_disk(number_of_points=50000)
+    pcd_points = np.asarray(point_cloud.points)
+    # kdtree = o3d.geometry.KDTreeFlann(point_cloud)
+    # nearest_points = []
+    # for pos in positions:
+    #     [_, idx, _] = kdtree.search_knn_vector_3d(pos, 1)  # Find the nearest neighbor
+    #     nearest_points.append(pcd_points[idx[0]])
+    # nearest_points = np.array(nearest_points)
+    # return create_red_markers(nearest_points, radius)
+    return create_red_markers(pcd_points, radius)
+    # for i, vertex in enumerate(nearest_points):
+    #     print(f"Target position: {positions[i]}, Nearest point on mesh: {vertex}")
 
-        # Translate the sphere to the vertex position
-        sphere.apply_translation(vertex)
-        red_dots.append(sphere)
 
-    print(f"Red dots created: {len(red_dots)}")
+    # mesh_vertices = np.array(mesh.vertices)
 
-    # Combine the red dots with the original mesh (if needed, optional)
-    combined_mesh = trimesh.util.concatenate([mesh] + red_dots)
-    combined_mesh.export(output_path)
-    print(f"Mesh with red dots exported to {output_path}")
 
-    return red_dots
+    # tree = cKDTree(mesh_vertices)
+    # distances, closest_indices = tree.query(nearest_points)
+
+    # print(f"Closest mesh vertices found for input coordinates: {len(closest_indices)}")
+
+    # red_dots = []
+    # # for index in closest_indices:
+    # for vertex in nearest_points:
+    #     # vertex = mesh_vertices[index]
+    #     sphere = trimesh.creation.icosphere(subdivisions=2, radius=dot_radius)
+    #     sphere.visual.vertex_colors = [255, 0, 0, 255]  # Red in RGBA
+    #     # sphere.visual.material = red_material
+
+    #     # Translate the sphere to the vertex position
+    #     sphere.apply_translation(vertex)
+    #     red_dots.append(sphere)
+
+    # print(f"Red dots created: {len(red_dots)}")
+
+    # # Combine the red dots with the original mesh (if needed, optional)
+    # combined_mesh = trimesh.util.concatenate([mesh] + red_dots)
+    # combined_mesh.export(output_path)
+    # print(f"Mesh with red dots exported to {output_path}")
+
+    # return red_dots
+def combine_meshes_o3d(mesh_list):
+    combined_vertices = []
+    combined_triangles = []
+    vertex_offset = 0
+
+    for mesh in mesh_list:
+        if not isinstance(mesh, o3d.geometry.TriangleMesh):
+            raise TypeError("All elements in the mesh list must be Open3D TriangleMesh objects.")
+        
+        # Add vertices and triangles from each mesh
+        combined_vertices.append(np.asarray(mesh.vertices))
+        combined_triangles.append(np.asarray(mesh.triangles) + vertex_offset)
+        
+        # Update the vertex offset for the next mesh
+        vertex_offset += len(mesh.vertices)
+
+    # Create a new TriangleMesh from the combined data
+    combined_mesh = o3d.geometry.TriangleMesh()
+    combined_mesh.vertices = o3d.utility.Vector3dVector(np.vstack(combined_vertices))
+    combined_mesh.triangles = o3d.utility.Vector3iVector(np.vstack(combined_triangles))
+
+    return combined_mesh
 
 def load_spot_with_red_dots():
     # get the folder path of this file
@@ -290,19 +347,6 @@ def load_robot_from_urdf(urdf_path):
     return robot_meshes
 
 
-def create_red_markers(marker_positions, radius=0.05):
-    """Create red spheres as markers at specified positions."""
-    red_markers = []
-    for pos in marker_positions:
-        # Create a sphere and set its position
-        print(f"radius: {radius}")
-        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
-        sphere.paint_uniform_color([1, 0, 0])  # Red color
-        sphere.translate(pos)
-        red_markers.append(sphere)
-    return red_markers
-
-
 def visualize_robot_with_markers(robot_meshes, markers):
     """Visualize the robot and red markers using Open3D."""
     geometry_list = robot_meshes + markers
@@ -448,7 +492,7 @@ def visualize_robot_with_markers(robot_meshes, marker_positions):
 
 if __name__ == "__main__":
     torque_path = "data/20241120/test.npy"
-    vis_joint_torques(torque_path)
+    # vis_joint_torques(torque_path)
     # urdf_path = 'spot_description/spot.urdf'
     # # joint_locations = get_joint_locations(urdf_path)
     # get_joint_positions(urdf_path)
@@ -458,24 +502,29 @@ if __name__ == "__main__":
     # urdf_path = 'spot_description/spot.urdf'
 
 
-    # robot = URDF.load('spot_description/spot.urdf')
-    # joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
-    # link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
-    # trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
-    # robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+    robot = URDF.load('spot_description/spot.urdf')
+    joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
+    link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
+    trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
+    robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
     # marker_positions = {
     #     "front": [0.445, 0.0, 0.05],  # Front
     #     "back": [-0.42, 0.0, 0.02],  # Back
     #     "right": [0.0, 0.11, 0.0],  # Right
     #     "left": [0.0, -0.11, 0.0],  # Left
     # }
+    # evenly pick 30 positions with z = 0.08, x in [-0.8, 0.8], y in [-0.2, 0.2]
+    top_markers = np.array([[random.uniform(-0.8, 0.8), random.uniform(-0.2, 0.2), 0.08] for _ in range(30)])
+    red_markers = create_red_markers([top_markers], radius = 0.01)
+    # visualize_robot_with_markers(robot_meshes, red_markers)
+    o3d.visualization.draw_geometries(robot_meshes + red_markers)
     # for place, marker in marker_positions.items():
     #     red_markers = create_red_markers([marker], radius = 0.01)
     #     print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
     #     o3d.visualization.draw_geometries(robot_meshes + red_markers)
-    #     # get today's date
-    #     # today = datetime.today().strftime('%Y%m%d')
-    #     # collect_data(f"data/{today}/{place}.npy")
-    #     # collect_data(f"data/20241120/test.npy")
+        # get today's date
+        # today = datetime.today().strftime('%Y%m%d')
+        # collect_data(f"data/{today}/{place}.npy")
+        # collect_data(f"data/20241120/test.npy")
 
 
