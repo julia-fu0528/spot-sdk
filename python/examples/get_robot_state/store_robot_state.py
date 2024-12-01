@@ -26,10 +26,10 @@ convert_trimesh_to_open3d, create_red_markers, visualize_robot_with_markers, com
 def collect_data(output_path, hostname, command):
     
 
-    dict_dir = '/'.join(output_path.split("/")[:-1])
+    # dict_dir = '/'.join(output_path.split("/")[:-1])
 
     # dict_dir = "data/20241120"
-    os.makedirs(dict_dir, exist_ok=True)
+    # os.makedirs(dict_dir, exist_ok=True)
     sdk = bosdyn.client.create_standard_sdk('RobotStateClient')
     robot = sdk.create_robot(hostname)
     bosdyn.client.util.authenticate(robot)
@@ -58,7 +58,7 @@ def collect_data(output_path, hostname, command):
 
     return True
 
-def main(output_path):
+def main(output_dir):
     import argparse
 
     commands = {'state', 'hardware', 'metrics'}
@@ -78,56 +78,55 @@ def main(output_path):
     trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
     robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
     # combined_robot_mesh = combine_meshes_o3d(robot_meshes)
-    print(f"Got combined mesh\n")
+    # print(f"Got combined mesh\n")
     # marker_positions = {
     #     "front": [0.445, 0.0, 0.05],  # Front
     #     "back": [-0.42, 0.0, 0.05],  # Back
     #     "left": [0.0, 0.11, 0.0],    # Left
-    #     "right": [0.0, -0.11, 0.0],  # Right
-    # }
-    # evenly pick 30 positions with z = 0.08, x in [-0.8, 0.8], y in [-0.15, 0.15]
-    top_markers_pos = np.array([[random.uniform(-0.5, 0.2), random.uniform(-0.1, 0.1), 0.075] for _ in range(40)])
-    front_markers_pos = np.array([[random.uniform(0.4, 0.445), random.uniform(-0.13, 0.13), random.uniform(-0.07, 0.08)] for _ in range(10)])
-    back_markers_pos = np.array([[-0.42, random.uniform(-0.13, 0.13), random.uniform(-0.07, 0.08)] for _ in range(10)])
-    left_markers_pos = np.array([[random.uniform(-0.22, 0.22), 0.11, random.uniform(-0.07,0.08)] for _ in range(20)])
-    right_markers_pos = np.array([[random.uniform(-0.22, 0.22), -0.11, random.uniform(-0.07, 0.08)] for _ in range(20)])
-    combined_pos = np.concatenate([top_markers_pos, front_markers_pos, back_markers_pos, left_markers_pos, right_markers_pos])
-    # top_markers = create_red_markers(top_markers_pos, radius = 0.01)
-    markers = add_red_dots(robot_meshes[0], 100, radius = 0.01)
-    print(f"Total number of markers: {len(markers)}")
-    o3d.visualization.draw_geometries(robot_meshes + markers)
-    sys.exit(0)
+    #     "right": [0.0, -0.11, 0.0],}  # Right
+    markers_pos = add_red_dots(robot_meshes[0], 100, radius = 0.01)
+    print(f"Total number of markers: {len(markers_pos)}")
+    # o3d.visualization.draw_geometries(robot_meshes + markers)
+    marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
+    print(f"marker positions: {marker_positions}")
     # for place, marker in marker_positions.items():
-    #     red_markers = create_red_markers([marker], radius = 0.01)
-    #     print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
-    #     o3d.visualization.draw_geometries(robot_meshes + red_markers)
+        # red_marker = create_red_markers([marker], radius = 0.01)
+        # print(f"YOU CAN TOUCH THE SPOT NOW.\n")
+        # o3d.visualization.draw_geometries(robot_meshes + red_marker)
     #     collect_data(output_path, hostname, command)
     #     print(f"Touch Data Collected for {place.upper()}, saved in {output_path}\n")
     # visualize_robot_with_markers(robot_meshes, marker_positions)
-    for place, position in marker_positions.items():
+    for idx, pos in marker_positions.items():
         # Create marker for current position
-        marker = create_red_markers([position], radius=0.02)[0]
-        print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
+        marker = create_red_markers([pos], radius=0.02)[0]
+        print(f"YOU CAN TOUCH THE SPOT NOW\n")
         
         # Create camera parameters facing the marker
-        camera_params = create_viewing_parameters(position)
+        camera_params = create_viewing_parameters(pos)
         
         # Combine geometries
         geometries = robot_meshes + [marker]
         
-        print(f"Viewing {place} marker. Press Ctrl+C in terminal to proceed to next view.")
+        print(f"Viewing marker {idx} . Press Ctrl+C in terminal to proceed to next view.")
         
         # Visualize with specific camera view
         visualize_with_camera(geometries, camera_params)
+        user_input = input(f"Is marker position {idx} legit? Enter 'y' for yes, 'n' for no (default: 'y'): \n").strip().lower()
+    
+        if user_input == 'n':
+            print(f"Marker position {idx} deemed not legit. Skipping this marker...\n")
+            continue
+        output_path = os.path.join(output_dir, f"{idx}.npy")
         # collect_data(output_path, hostname, command)
-        # print(f"Touch Data Collected for {place.upper()}, saved in {output_path}\n")
+        print(f"Touch Data Collected for marker position {idx}, saved in {output_path}\n")
         
 
     
 
 
 if __name__ == '__main__':
-    output_path = "data/20241120/test.npy"
-    main(output_path)
+    output_dir = "data/202412"
+    os.makedirs(output_dir, exist_ok=True)
+    main(output_dir)
     # if not main(output_path):
     #     sys.exit(1)

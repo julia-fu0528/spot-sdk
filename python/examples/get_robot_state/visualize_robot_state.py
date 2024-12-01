@@ -99,55 +99,31 @@ def create_red_markers(marker_positions, radius=0.01):
     return red_markers
 
 
-# def add_red_dots(mesh, positions, radius=0.01, output_path=None):
-def add_red_dots(mesh, num_samples, radius=0.01, output_path=None):
+def add_red_dots(mesh, num_samples, z_threshold = 0.07, radius=0.01, output_path=None):
     ## OPEN3D NEAREST NEIGHBOR
     ## OPEN3D POINTCLOUD SAMPLING: RANDOM SAMPLING/POISSON DISK SAMPLING (BETTER)
     ## STORE JOINT ANGLES(POSE) IN ADDITION TO JOINT TORQUE
     ## REAL-TIME PREDICTION
-    point_cloud = mesh.sample_points_poisson_disk(number_of_points=num_samples)
-    # point_cloud = mesh.sample_points_poisson_disk(number_of_points=50000)
-    pcd_points = np.asarray(point_cloud.points)
-    # kdtree = o3d.geometry.KDTreeFlann(point_cloud)
-    # nearest_points = []
-    # for pos in positions:
-    #     [_, idx, _] = kdtree.search_knn_vector_3d(pos, 1)  # Find the nearest neighbor
-    #     nearest_points.append(pcd_points[idx[0]])
-    # nearest_points = np.array(nearest_points)
-    # return create_red_markers(nearest_points, radius)
-    return create_red_markers(pcd_points, radius)
-    # for i, vertex in enumerate(nearest_points):
-    #     print(f"Target position: {positions[i]}, Nearest point on mesh: {vertex}")
+    point_cloud = mesh.sample_points_poisson_disk(number_of_points=1000)
+    points = np.asarray(point_cloud.points)
+    points_to_filter_z = points[
+        (points[:, 2] < z_threshold) & 
+        (points[:, 1] > -0.09) & (points[:, 1] < 0.09) & 
+        (points[:, 0] > -0.4) & (points[:, 0] < 0.40)]
+    mask = np.ones(len(points), dtype=bool)  # Start with all points included
+    for point in points_to_filter_z:
+        mask = mask & ~np.all(points == point, axis=1)  # Exclude matching rows
+
+    filtered_points = points[mask]
+    filtered_pcd = o3d.geometry.PointCloud()
+    filtered_pcd.points = o3d.utility.Vector3dVector(filtered_points)
+    resampled_pcd = filtered_pcd.random_down_sample(num_samples/ len(filtered_points))
+    pcd_points = np.asarray(resampled_pcd.points)
+
+    return pcd_points
+    return create_red_markers(pcd_points, radius), pcd_points
 
 
-    # mesh_vertices = np.array(mesh.vertices)
-
-
-    # tree = cKDTree(mesh_vertices)
-    # distances, closest_indices = tree.query(nearest_points)
-
-    # print(f"Closest mesh vertices found for input coordinates: {len(closest_indices)}")
-
-    # red_dots = []
-    # # for index in closest_indices:
-    # for vertex in nearest_points:
-    #     # vertex = mesh_vertices[index]
-    #     sphere = trimesh.creation.icosphere(subdivisions=2, radius=dot_radius)
-    #     sphere.visual.vertex_colors = [255, 0, 0, 255]  # Red in RGBA
-    #     # sphere.visual.material = red_material
-
-    #     # Translate the sphere to the vertex position
-    #     sphere.apply_translation(vertex)
-    #     red_dots.append(sphere)
-
-    # print(f"Red dots created: {len(red_dots)}")
-
-    # # Combine the red dots with the original mesh (if needed, optional)
-    # combined_mesh = trimesh.util.concatenate([mesh] + red_dots)
-    # combined_mesh.export(output_path)
-    # print(f"Mesh with red dots exported to {output_path}")
-
-    # return red_dots
 def combine_meshes_o3d(mesh_list):
     combined_vertices = []
     combined_triangles = []
