@@ -2,4 +2,7 @@ my_spot_env/*
 python/examples/get_robot_state/spot_description/*
 *.npy
 python/examples/get_robot_state/logs/*
+python/examples/get_robot_state/log/*
 python/examples/get_robot_state/model/*
+python/examples/get_robot_state/vis/*
+python/examples/get_robot_state/data/*

@@ -11,9 +11,11 @@ def create_viewing_parameters(target_position, distance=1.0):
         distance (float): Distance from the target point
     """
     target = np.array(target_position)
-    
+    print(f"type of target: {target}")
+    print(f"type of distance: {distance}")
     # Default camera position and orientation
     eye = target + np.array([distance, distance, distance])
+    print("after eye\n")
     up = np.array([0, 0, 1])
     
     # Custom views based on specific target positions

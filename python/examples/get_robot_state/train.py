@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import random
 import sys
+from natsort import natsorted
 from pathlib import Path
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -26,16 +27,20 @@ from visualize_robot_state import load_joint_torques, vis_joint_torques
 def load_data(torque_dir, class_to_index):
     torque_data = []
     labels = []
+
+    no_contact_torque, _, _, _ = load_joint_torques(os.path.join(torque_dir, "no_contact.npy"))
+    offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
     
-    for torque_file in os.listdir(torque_dir):
+    for torque_file in natsorted(os.listdir(torque_dir)):
         if torque_file.endswith(".npy"):
             torque_path = os.path.join(torque_dir, torque_file)
             class_name = torque_file.split(".")[0]  # Extract label from the filename
             if class_name in classes:
                 torque, _, _, _ = load_joint_torques(torque_path)
+                torque = torque - offset  # Subtract offset
                 torque_data.append(torque)
+                # labels.append(class_name * len(torque))
                 labels.append([class_to_index[class_name]] * len(torque))  # Map class name to index
-
 
     # get the min length of the torque data
     min_length = min([len(torque) for torque in torque_data])
@@ -44,18 +49,17 @@ def load_data(torque_dir, class_to_index):
     # torque_data = pad_sequences(torque_data, padding='post', dtype='float32')
     torque_data = np.array(torque_data)
     labels = np.array(labels)
+    # print(f"labels: {labels}")
 
     return torque_data, labels
 
 def preprocess(torque_dir, classes):
     class_to_index = {cls: idx for idx, cls in enumerate(classes)}
     torque_data, labels = load_data(torque_dir, class_to_index)
-    print(f"torque_data.shape: {torque_data.shape}")
-    print(f"labels.shape: {labels.shape}")
+    print(f"labels: {labels}")
 
     # One-hot encode labels
     labels_one_hot = to_categorical(labels, num_classes=len(classes))
-    print(f"labels_one_hot.shape: {labels_one_hot.shape}")
 
     # Split the second dimension (time steps)
     time_steps = torque_data.shape[1]
@@ -229,13 +233,38 @@ def plot_tsne(X, y, classes, save_path=None):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--session', type = str, required=True, help='Session for data collection')
+    parser.add_argument('--data_dir', required=True, help='Output directory for data')
+    parser.add_argument('--model_dir', required=True, help='Output directory for model')
+    parser.add_argument('--log_dir', required=True, help='Output directory for logs')
+    parser.add_argument('--plots_dir', required=True, help='Output directory for plots')
+
+    options = parser.parse_args()
+
+    session = options.session
+    print(f"session: {session}")
+    data_dir = options.data_dir
+    model_dir = options.model_dir
+    log_dir = options.log_dir
+    plots_dir = options.plots_dir
+
     # Path to the directory containing `.npy` files
     # current folder path 
     folder_path =  Path(__file__).parent
-    torque_dir = os.path.join(folder_path, "data/20241120")
-    model_dir = os.path.join(folder_path, "model")
-    log_dir = os.path.join(folder_path, "logs")
-    plots_dir = os.path.join(folder_path, "plots")  # New directory for plots
+    torque_dir = os.path.join(folder_path, data_dir, session)
+    # get all the files with .npy extension
+    # torque_dir = natsorted(os.listdir(torque_dir))
+    torque_files = [f for f in os.listdir(torque_dir) if f.endswith('.npy')]
+    torque_files = natsorted(torque_files)
+    # get all the file names
+    classes = [f.split('.')[0] for f in torque_files]
+    print(f"torque_classes: {classes}")
+    model_dir = os.path.join(folder_path, model_dir, session)
+    log_dir = os.path.join(folder_path, log_dir, session)
+    plots_dir = os.path.join(folder_path, plots_dir, session)  # New directory for plots
 
 
     os.makedirs(model_dir, exist_ok=True)
@@ -247,7 +276,7 @@ if __name__ == "__main__":
     best_model_path = os.path.join(model_dir, 'best_model.keras')
 
 
-    classes = ['no_contact', 'front', 'back', 'left', 'right']  # Define your classes
+    # classes = ['no_contact', 'front', 'back', 'left', 'right']  # Define your classes
     X_train, X_val, y_train, y_val = preprocess(torque_dir, classes)
 
      # Create t-SNE visualization before training

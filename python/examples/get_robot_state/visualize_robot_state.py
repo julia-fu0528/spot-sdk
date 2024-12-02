@@ -27,6 +27,8 @@ def load_joint_torques(torque_path):
     torque_dict = {}
     for i in range(len(state)):
         state_dict[i] = state[i].kinematic_state.joint_states
+        print(f"state_dict: {state[i]}")
+        sys.exit()
         torque_dict[i] = []
         for joint in state_dict[i]:
             joint_name = getattr(joint, 'name', None)
@@ -53,9 +55,42 @@ def load_joint_torques(torque_path):
             if i == 0:
                 joint_names.append(joint['name'])
     # print(f"torque dict:{torque_dict}")
-    print(f"torque data:{torque_data.shape}")
     return torque_data, num_entries, num_joints, joint_names
 
+
+def load_joint_positions(joint_path):
+    state = np.load(joint_path, allow_pickle=True)
+    state_dict = {}
+    joint_pos_dict = {}
+    for i in range(len(state)):
+        state_dict[i] = state[i].kinematic_state.joint_states
+        joint_pos_dict[i] = []
+        for joint in state_dict[i]:
+            joint_name = getattr(joint, 'name', None)
+            if joint_name is not None:
+                if not joint_name.startswith("arm"):
+                    # Store both the joint name and load value in the dictionary
+                    joint_pos_dict[i].append({
+                        'name': joint_name,
+                        'load': joint.position.value  # Assuming load has a 'value' attribute
+                    })
+
+    # Determine the number of entries and the maximum number of joints to dynamically handle varying joint counts
+    num_entries = len(joint_pos_dict)
+    num_joints = max(len(joint_pos_dict[i]) for i in joint_pos_dict)
+
+    # Initialize torque_data with NaN values in case different entries have different joint counts
+    joint_pos_data = np.full((num_entries, num_joints), np.nan, dtype=float)
+    joint_names = []
+
+    # Fill torque_data with torque values, ignoring missing joints for each entry
+    for i in range(num_entries):
+        for j, joint in enumerate(joint_pos_dict[i]):
+            joint_pos_data[i, j] = joint['load']
+            if i == 0:
+                joint_names.append(joint['name'])
+    # print(f"torque dict:{torque_dict}")
+    return joint_pos_data, num_entries, num_joints, joint_names
 
 def vis_joint_torques(torque_path):
     torque_data, num_entries, num_joints, joint_names = load_joint_torques(torque_path)
@@ -77,6 +112,31 @@ def vis_joint_torques(torque_path):
     output_dir = "vis"
     os.makedirs(output_dir, exist_ok=True)
     save_path = os.path.join(output_dir, f"{torque_path.split('.')[0].split('/')[-1]}.png")
+    print(f"save_path: {save_path}")
+    plt.savefig(save_path, format="png", dpi=300)  # Save as a PNG file with 300 dpi resolution
+
+    plt.show()
+
+def vis_joint_pos(joint_pos_path):
+    joint_pos_data, num_entries, num_joints, joint_names = load_joint_positions(joint_pos_path)
+
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    time_steps = np.arange(num_entries)
+
+    for j in range(num_joints):
+        plt.plot(time_steps, joint_pos_data[:, j], label=f'Joint {joint_names[j]}')
+
+    # Add labels and legend
+    plt.xlabel("Time")
+    plt.ylabel("Joint Position")
+    plt.title(f"Joint Position Over Time for Each Joint for {joint_pos_path.split('.')[0]}")
+    plt.legend()
+    plt.grid(True)
+
+    output_dir = "vis/joint_pos"
+    os.makedirs(output_dir, exist_ok=True)
+    save_path = os.path.join(output_dir, f"{joint_pos_path.split('.')[0].split('/')[-1]}.png")
     print(f"save_path: {save_path}")
     plt.savefig(save_path, format="png", dpi=300)  # Save as a PNG file with 300 dpi resolution
 
@@ -467,8 +527,9 @@ def visualize_robot_with_markers(robot_meshes, marker_positions):
 
 
 if __name__ == "__main__":
-    torque_path = "data/20241120/test.npy"
+    torque_path = "data/test/no_contact_undocked_2.npy"
     # vis_joint_torques(torque_path)
+    vis_joint_pos(torque_path)
     # urdf_path = 'spot_description/spot.urdf'
     # # joint_locations = get_joint_locations(urdf_path)
     # get_joint_positions(urdf_path)
@@ -478,11 +539,11 @@ if __name__ == "__main__":
     # urdf_path = 'spot_description/spot.urdf'
 
 
-    robot = URDF.load('spot_description/spot.urdf')
-    joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
-    link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
-    trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
-    robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+    # robot = URDF.load('spot_description/spot.urdf')
+    # joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
+    # link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
+    # trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
+    # robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
     # marker_positions = {
     #     "front": [0.445, 0.0, 0.05],  # Front
     #     "back": [-0.42, 0.0, 0.02],  # Back
@@ -490,10 +551,10 @@ if __name__ == "__main__":
     #     "left": [0.0, -0.11, 0.0],  # Left
     # }
     # evenly pick 30 positions with z = 0.08, x in [-0.8, 0.8], y in [-0.2, 0.2]
-    top_markers = np.array([[random.uniform(-0.8, 0.8), random.uniform(-0.2, 0.2), 0.08] for _ in range(30)])
-    red_markers = create_red_markers([top_markers], radius = 0.01)
+    # top_markers = np.array([[random.uniform(-0.8, 0.8), random.uniform(-0.2, 0.2), 0.08] for _ in range(30)])
+    # red_markers = create_red_markers([top_markers], radius = 0.01)
     # visualize_robot_with_markers(robot_meshes, red_markers)
-    o3d.visualization.draw_geometries(robot_meshes + red_markers)
+    # o3d.visualization.draw_geometries(robot_meshes + red_markers)
     # for place, marker in marker_positions.items():
     #     red_markers = create_red_markers([marker], radius = 0.01)
     #     print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
