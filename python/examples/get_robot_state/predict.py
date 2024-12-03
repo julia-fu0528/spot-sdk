@@ -27,7 +27,7 @@ def collect_realtime_data(robot_state_client, duration=2):
     print("Real-time data collection complete.")
     return np.array(data)
 
-def preprocess_realtime_data(data, offset, markers_path):
+def preprocess_realtime_data(data, offset, markers_path, normalize=True):
     """
     Preprocess the real-time data for inference.
     """
@@ -60,9 +60,14 @@ def preprocess_realtime_data(data, offset, markers_path):
                 joint_names.append(joint['name'])
     # data_processed = np.array([d.joint_state.load_torque for d in data])
     # data_processed = np.expand_dims(data_processed, axis=0)  # Add batch dimension
+    # normalize
+    # torque_data = torque_data - offset
+    if normalize:
+        print(f"Normalizing torque data...\n")
+        torque_data = 2 * ((torque_data - torque_data.min()) / (torque_data.max() - torque_data.min())) - 1
+    # torque_data.append(normalized_torque)
     min_length = min([len(torque) for torque in torque_data])
     torque_data = [torque[:min_length] for torque in torque_data]
-    torque_data = torque_data - offset
     data_processed = np.array(torque_data)
 
     return data_processed
@@ -174,10 +179,10 @@ def main():
     classes = [f.split('.')[0] for f in torque_files]
 
     # no_contact_torque, _, _, _ = load_joint_torques(os.path.join(torque_dir, "no_contact.npy"))
-    print(f"Collecting no-contact torque data for offset calculation...")
-    no_contact_torque = collect_realtime_data(robot_state_client, 10)
-    no_contact_torque = preprocess_realtime_data(no_contact_torque, np.zeros(12), markers_path)
-    offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
+    # print(f"Collecting no-contact torque data for offset calculation...")
+    # no_contact_torque = collect_realtime_data(robot_state_client, 10)
+    # no_contact_torque = preprocess_realtime_data(no_contact_torque, np.zeros(12), markers_path, False)
+    # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
 
 
     try:
@@ -188,7 +193,8 @@ def main():
             data = collect_realtime_data(robot_state_client, 5)
 
             # Preprocess the data for inference
-            processed_data = preprocess_realtime_data(data, offset, markers_path)
+            # processed_data = preprocess_realtime_data(data, offset, markers_path)
+            processed_data = preprocess_realtime_data(data, np.zeros(12), markers_path)
 
             # Perform inference
             predicted_class, confidence = infer_realtime(model, processed_data, classes)

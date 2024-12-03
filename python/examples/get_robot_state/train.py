@@ -28,8 +28,9 @@ def load_data(torque_dir, class_to_index):
     torque_data = []
     labels = []
 
-    no_contact_torque, _, _, _ = load_joint_torques(os.path.join(torque_dir, "no_contact.npy"))
-    offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
+    # no_contact_torque, _, _, _ = load_joint_torques(os.path.join(torque_dir, "no_contact.npy"))
+    # no_contact_torque = 2 * ((no_contact_torque - no_contact_torque.min()) / (no_contact_torque.max() - no_contact_torque.min())) - 1
+    # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
     
     for torque_file in natsorted(os.listdir(torque_dir)):
         if torque_file.endswith(".npy"):
@@ -37,8 +38,10 @@ def load_data(torque_dir, class_to_index):
             class_name = torque_file.split(".")[0]  # Extract label from the filename
             if class_name in classes:
                 torque, _, _, _ = load_joint_torques(torque_path)
-                torque = torque - offset  # Subtract offset
-                torque_data.append(torque)
+                # torque = torque - offset  # Subtract offset
+                normalized_torque = 2 * ((torque - torque.min()) / (torque.max() - torque.min())) - 1
+                torque_data.append(normalized_torque)
+                # torque_data.append(torque)
                 # labels.append(class_name * len(torque))
                 labels.append([class_to_index[class_name]] * len(torque))  # Map class name to index
 

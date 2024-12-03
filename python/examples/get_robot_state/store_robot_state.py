@@ -44,7 +44,7 @@ def collect_data(output_path, hostname, command, duration=10):
         
         # save data whe press ctrl+c
         # except KeyboardInterrupt as e:
-        print("Data collection complete\n")
+        print(f"Data collection complete, saved in {output_path}\n")
         np.save(output_path, state_dict)
 
     elif command == 'hardware':
@@ -89,7 +89,10 @@ def main():
     # o3d.visualization.draw_geometries(robot_meshes + markers)
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
-    collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
+    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
+    os.makedirs("data/test1203", exist_ok=True)
+    collect_data(os.path.join("data/test1203", f"5.npy"), hostname, command, duration)
+    sys.exit()
     for idx, pos in marker_positions.items():
         # Create marker for current position
         marker = create_red_markers([pos], radius=0.02)[0]

@@ -27,8 +27,6 @@ def load_joint_torques(torque_path):
     torque_dict = {}
     for i in range(len(state)):
         state_dict[i] = state[i].kinematic_state.joint_states
-        print(f"state_dict: {state[i]}")
-        sys.exit()
         torque_dict[i] = []
         for joint in state_dict[i]:
             joint_name = getattr(joint, 'name', None)
@@ -117,6 +115,41 @@ def vis_joint_torques(torque_path):
 
     plt.show()
 
+def vis_joint_pos_delta(joint_pos_path1, joint_pos_path2):
+    joint_pos_data1, num_entries1, num_joints1, joint_names1 = load_joint_positions(joint_pos_path1)
+    joint_pos_data2, num_entries2, num_joints2, joint_names2 = load_joint_positions(joint_pos_path2)
+
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    num_entries = min(num_entries1, num_entries2)
+    print(f"num_entries1: {num_entries1}")
+    print(f"num_entries2: {num_entries2}")
+    time_steps = np.arange(num_entries)
+    joint_pos_data1 = joint_pos_data1[:num_entries]
+    joint_pos_data2 = joint_pos_data2[:num_entries]
+    print(f"joint_pos_data1: {joint_pos_data1}")
+    print(f"joint_pos_data2: {joint_pos_data2}")
+    joint_pos_data = joint_pos_data1 - joint_pos_data2
+    print(f"joint_pos_data: {joint_pos_data}")
+
+    for j in range(num_joints1):
+        plt.plot(time_steps, joint_pos_data[:, j], label=f'Joint {joint_names1[j]}')
+
+    # Add labels and legend
+    plt.xlabel("Time")
+    plt.ylabel("Joint Position")
+    plt.title(f"Delta Joint Position Over Time for Each Joint for {joint_pos_path1.split('.')[0]} and {joint_pos_path2.split('.')[0]}")
+    plt.legend()
+    plt.grid(True)
+
+    output_dir = "vis/joint_pos/1203"
+    os.makedirs(output_dir, exist_ok=True)
+    save_path = os.path.join(output_dir, f"{joint_pos_path1.split('.')[0].split('/')[-1]}-{joint_pos_path2.split('.')[0].split('/')[-1]}.png")
+    print(f"save_path: {save_path}")
+    plt.savefig(save_path, format="png", dpi=300)  # Save as a PNG file with 300 dpi resolution
+
+    plt.show()
+
 def vis_joint_pos(joint_pos_path):
     joint_pos_data, num_entries, num_joints, joint_names = load_joint_positions(joint_pos_path)
 
@@ -134,7 +167,7 @@ def vis_joint_pos(joint_pos_path):
     plt.legend()
     plt.grid(True)
 
-    output_dir = "vis/joint_pos"
+    output_dir = "vis/joint_pos/1203"
     os.makedirs(output_dir, exist_ok=True)
     save_path = os.path.join(output_dir, f"{joint_pos_path.split('.')[0].split('/')[-1]}.png")
     print(f"save_path: {save_path}")
@@ -526,10 +559,12 @@ def visualize_robot_with_markers(robot_meshes, marker_positions):
         visualize_with_camera(geometries, camera_params)
 
 
+
 if __name__ == "__main__":
-    torque_path = "data/test/no_contact_undocked_2.npy"
-    # vis_joint_torques(torque_path)
-    vis_joint_pos(torque_path)
+    torque_path1 = "data/test1203/0.npy"
+    torque_path2 = "data/test1203/5.npy"
+    vis_joint_torques(torque_path2)
+    vis_joint_pos_delta(torque_path1, torque_path2)
     # urdf_path = 'spot_description/spot.urdf'
     # # joint_locations = get_joint_locations(urdf_path)
     # get_joint_positions(urdf_path)
