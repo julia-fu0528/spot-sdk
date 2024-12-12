@@ -1,6 +1,6 @@
 echo "################# COLLECT DATA ###########################"
 python store_robot_state.py 138.16.161.21 state \
-                            --output_dir data/gouger1209/19 \
+                            --output_dir data/gouger1209/0 \
                             --markers_path data/gouger_markers_pos.txt\
 
 
