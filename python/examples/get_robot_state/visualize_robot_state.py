@@ -15,7 +15,9 @@ import random
 from collections import defaultdict
 from urdfpy import URDF
 from scipy.spatial import cKDTree
+from scipy.spatial import KDTree
 import open3d as o3d
+from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 
 # from pykdl_utils.kdl_kinematics import KDLKinematics
@@ -178,6 +180,24 @@ def vis_joint_pos(joint_pos_path):
 def load_spot():
     robot = URDF.load('spot_description/spot.urdf')
     robot.show()
+
+def find_closest_vertices(mesh, positions, num_points = 10000): 
+    # Build a KD-tree for efficient nearest-neighbor search
+    # if not isinstance(mesh_vertices, np.ndarray):
+    #     mesh_vertices = np.asarray(mesh_vertices)
+    sampled_points = sample_points_from_mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles), num_points)
+
+    # kdtree = KDTree(mesh_vertices)
+    kdtree = KDTree(sampled_points)
+    
+    # Query the closest vertex for each position
+    closest_distances, closest_indices = kdtree.query(positions)
+    
+    # Extract the closest vertex positions
+    # closest_vertices = mesh_vertices[closest_indices]
+    closest_vertices = sampled_points[closest_indices]
+
+    return closest_vertices, closest_indices
 
 
 def create_red_markers(marker_positions, radius=0.01):

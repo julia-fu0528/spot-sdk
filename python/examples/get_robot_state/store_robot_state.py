@@ -19,7 +19,7 @@ import open3d as o3d
 import random
 
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
-from visualize_robot_state import add_red_dots, compute_forward_kinematics, prepare_trimesh_fk, \
+from visualize_robot_state import find_closest_vertices, add_red_dots, compute_forward_kinematics, prepare_trimesh_fk, \
 convert_trimesh_to_open3d, create_red_markers, visualize_robot_with_markers, combine_meshes_o3d
 
 
@@ -81,19 +81,118 @@ def main():
     trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
     robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
     # combined_robot_mesh = combine_meshes_o3d(robot_meshes)
-    # markers_pos = add_red_dots(robot_meshes[0], 100, radius = 0.01)
-    # np.savetxt(markers_path, markers_pos, delimiter=",", comments="")
-    markers_pos = np.loadtxt(markers_path, delimiter=",")
-    print("Loaded markers positions: ", markers_pos)
-    print(f"Total number of markers: {len(markers_pos)}")
-    # o3d.visualization.draw_geometries(robot_meshes + markers)
+    markers_pos = [
+        # front
+        [0.45, 0.06, -0.035],
+        [0.45, -0.07, -0.035],
+        # back
+        [-0.45, 0.05, 0.05],
+        [-0.45, -0.05, 0.05],
+        # left
+        [0.13, 0.14, 0.01],
+        [-0.13, 0.14, -0.01],
+        # right
+        [0.1, -0.15, -0.01],
+        [-0.13, -0.14, -0.01],
+        # top
+        [0.1, 0.05, 0.09],
+        [-0.12, -0.01, 0.09],
+    ]
+    # LEFT: 24
+    for i in range(8):
+        x = -0.2 + i / 8 * (0.25 - (-0.2))
+        for j in range(3):
+            z = -0.04 + j / 3 * (0.1 - (-0.04))
+            markers_pos.append([x, 0.105, z])
+    # RIGHT: 24
+    for i in range(8):
+        x = -0.2 + i / 8 * (0.25 - (-0.2))
+        for j in range(3):
+            z = -0.04 + j / 3 * (0.1 - (-0.04))
+            markers_pos.append([x, -0.105, z])
+    # TOP: 24
+    for i in range(6):
+        x = -0.37 + i / 6 * (0.04 - (-0.37))
+        for j in range(3):
+            y = -0.04 + j/3 * (0.08 - (-0.04))
+            markers_pos.append([x, y, 0.08])
+    markers_pos.append([-0.2, 0.08, 0.08])
+    markers_pos.append([-0.12, 0.08, 0.08])
+    markers_pos.append([0.01, 0.08, 0.08])
+    markers_pos.append([-0.2, -0.07, 0.08])
+    markers_pos.append([0.01, -0.07, 0.08])
+    markers_pos.append([0.1, -0.07, 0.08])
+    # FRONT: 8
+    for i in range(4):
+        y = -0.07 + i / 4 * (0.11 - (-0.07))
+        markers_pos.append([0.39, y, -0.07])
+        markers_pos.append([0.44, y, 0.04])
+    # BACK: 10
+    for i in range(4):
+        y = -0.07 + i / 4 * (0.11 - (-0.07))
+        markers_pos.append([-0.40, y, -0.06])
+        markers_pos.append([-0.42, y, 0.04])
+    markers_pos.append([-0.42, -0.07, -0.01])
+    markers_pos.append([-0.42, 0.07, -0.01])
+    markers_pos = np.array(markers_pos)
+    print(f"markers_pos shape{markers_pos.shape}")
+    num_points = 10000
+    markers_pos, pos_indices = find_closest_vertices(robot_meshes[0], markers_pos, num_points)
+    print(f"markers_pos shape{markers_pos}")
+    # # LEFT: 24
+    # for i in range(8):
+    #     x = -0.2 + i / 8 * (0.25 - (-0.2))
+    #     for j in range(3):
+    #         z = -0.04 + j / 3 * (0.1 - (-0.04))
+    #         markers_pos = np.append(markers_pos, [[x, 0.105, z]], axis=0)
+    # # RIGHT: 24
+    # for i in range(8):
+    #     x = -0.2 + i / 8 * (0.25 - (-0.2))
+    #     for j in range(3):
+    #         z = -0.04 + j / 3 * (0.1 - (-0.04))
+    #         markers_pos = np.append(markers_pos, [[x, -0.105, z]], axis=0)
+    # # TOP: 24
+    # for i in range(6):
+    #     x = -0.37 + i / 6 * (0.04 - (-0.37))
+    #     for j in range(3):
+    #         y = -0.04 + j/3 * (0.08 - (-0.04))
+    #         markers_pos = np.append(markers_pos, [[x, y, 0.08]], axis=0)
+    # markers_pos = np.append(markers_pos, [[-0.2, 0.08, 0.08],
+    #                                       [-0.12, 0.08, 0.08],
+    #                                       [0.01, 0.08, 0.08],
+    #                                       [-0.2, -0.07, 0.08],
+    #                                       [0.01, -0.07, 0.08],
+    #                                       [0.1, -0.07, 0.08]], axis=0)
+    # # FRONT: 8
+    # for i in range(4):
+    #     y = -0.07 + i / 4 * (0.11 - (-0.07))
+    #     markers_pos = np.append(markers_pos, [[0.39, y, -0.07],
+    #                                           [0.44, y, 0.04]], axis=0)
+    # # BACK: 10
+    # for i in range(4):
+    #     y = -0.07 + i / 4 * (0.11 - (-0.07))
+    #     markers_pos = np.append(markers_pos, [[-0.40, y, -0.06],
+    #                                           [-0.42, y, 0.04]], axis=0)
+    # markers_pos = np.append(markers_pos, [[-0.42, -0.07, -0.01],
+    #                                       [-0.42, 0.07, -0.01]], axis=0)
+    print(f"markers_pos shape{markers_pos}")
+    # sampled_markers_pos = add_red_dots(robot_meshes[0], 40, radius = 0.02)
+    np.savetxt(markers_path, markers_pos, delimiter=",", comments="")
+    sys.exit()
+    # markers_pos = np.loadtxt(markers_path, delimiter=",")
+    # print("Loaded markers positions: ", markers_pos)
+    # print(f"Total number of markers: {len(markers_pos)}")
+    markers = create_red_markers(markers_pos, radius=0.02)
+    o3d.visualization.draw_geometries(robot_meshes + markers)
+    sys.exit()
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
+    print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
     # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
-    os.makedirs("data/test1203", exist_ok=True)
-    collect_data(os.path.join("data/test1203", f"5.npy"), hostname, command, duration)
-    sys.exit()
+    # os.makedirs("data/test1203", exist_ok=True)
     for idx, pos in marker_positions.items():
+        if idx != '8':
+            continue
         # Create marker for current position
         marker = create_red_markers([pos], radius=0.02)[0]
         
