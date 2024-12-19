@@ -92,30 +92,6 @@ def load_joint_positions(joint_path):
     # print(f"torque dict:{torque_dict}")
     return joint_pos_data, num_entries, num_joints, joint_names
 
-def vis_joint_torques(torque_path):
-    torque_data, num_entries, num_joints, joint_names = load_joint_torques(torque_path)
-
-    # Create the plot
-    plt.figure(figsize=(10, 6))
-    time_steps = np.arange(num_entries)
-
-    for j in range(num_joints):
-        plt.plot(time_steps, torque_data[:, j], label=f'Joint {joint_names[j]}')
-
-    # Add labels and legend
-    plt.xlabel("Time")
-    plt.ylabel("Torque")
-    plt.title(f"Torque Over Time for Each Joint for {torque_path.split('.')[0]}")
-    plt.legend()
-    plt.grid(True)
-
-    output_dir = "vis"
-    os.makedirs(output_dir, exist_ok=True)
-    save_path = os.path.join(output_dir, f"{torque_path.split('.')[0].split('/')[-1]}.png")
-    print(f"save_path: {save_path}")
-    plt.savefig(save_path, format="png", dpi=300)  # Save as a PNG file with 300 dpi resolution
-
-    plt.show()
 
 def vis_joint_pos_delta(joint_pos_path1, joint_pos_path2):
     joint_pos_data1, num_entries1, num_joints1, joint_names1 = load_joint_positions(joint_pos_path1)
@@ -152,26 +128,69 @@ def vis_joint_pos_delta(joint_pos_path1, joint_pos_path2):
 
     plt.show()
 
-def vis_joint_pos(joint_pos_path):
-    joint_pos_data, num_entries, num_joints, joint_names = load_joint_positions(joint_pos_path)
 
+def vis_joint_torques(torque_path_list):
+    # torque_data, num_entries, num_joints, joint_names = load_joint_torques(torque_path)
+    all_torque_data = None
+    total_entries = 0
+    for torque_path in torque_path_list:
+        torque_data, num_entries, num_joints, joint_names = load_joint_torques(torque_path)
+        total_entries += num_entries
+        if all_torque_data is None:
+            all_torque_data = torque_data
+        else:
+            all_torque_data = np.vstack((all_torque_data, torque_data))
     # Create the plot
     plt.figure(figsize=(10, 6))
-    time_steps = np.arange(num_entries)
+    time_steps = np.arange(total_entries)
 
     for j in range(num_joints):
-        plt.plot(time_steps, joint_pos_data[:, j], label=f'Joint {joint_names[j]}')
+        plt.plot(time_steps, torque_data[:, j], label=f'Joint {joint_names[j]}')
+
+    # Add labels and legend
+    plt.xlabel("Time")
+    plt.ylabel("Torque")
+    plt.title(f"Torque Over Time for Each Joint for {torque_path.split('.')[0]}")
+    plt.legend()
+    plt.grid(True)
+
+    output_dir = f"vis/1219/{torque_path.split('.')[0].split('/')[-2]}"
+    os.makedirs(output_dir, exist_ok=True)
+    save_path = os.path.join(output_dir, f"{torque_path.split('.')[0].split('/')[-1]}_torque.png")
+    print(f"save_path: {save_path}")
+    plt.savefig(save_path, format="png", dpi=300)  # Save as a PNG file with 300 dpi resolution
+
+    plt.show()
+
+
+def vis_joint_pos(joint_pos_path_list):
+    all_joint_pos_data = None
+    total_entries = 0
+    for joint_pos_path in joint_pos_path_list:
+        joint_pos_data, num_entries, num_joints, joint_names = load_joint_positions(joint_pos_path)
+        total_entries += num_entries
+        if all_joint_pos_data is None:
+            all_joint_pos_data = joint_pos_data
+        else:
+            all_joint_pos_data = np.vstack((all_joint_pos_data, joint_pos_data))
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    time_steps = np.arange(total_entries)
+
+    for j in range(num_joints):
+        plt.plot(time_steps, all_joint_pos_data[:, j], label=f'Joint {joint_names[j]}')
 
     # Add labels and legend
     plt.xlabel("Time")
     plt.ylabel("Joint Position")
-    plt.title(f"Joint Position Over Time for Each Joint for {joint_pos_path.split('.')[0]}")
+    # plt.title(f"Joint Position Over Time for Each Joint for {joint_pos_path.split('.')[0]}")
+    plt.title("Joint Position Over Time for Each Joint")
     plt.legend()
     plt.grid(True)
 
-    output_dir = "vis/joint_pos/1203"
+    output_dir = f"vis/1219/{joint_pos_path_list[0].split('.')[0].split('/')[-2]}"
     os.makedirs(output_dir, exist_ok=True)
-    save_path = os.path.join(output_dir, f"{joint_pos_path.split('.')[0].split('/')[-1]}.png")
+    save_path = os.path.join(output_dir, f"{joint_pos_path_list[0].split('.')[0].split('/')[-1]}.png")
     print(f"save_path: {save_path}")
     plt.savefig(save_path, format="png", dpi=300)  # Save as a PNG file with 300 dpi resolution
 
@@ -581,42 +600,12 @@ def visualize_robot_with_markers(robot_meshes, marker_positions):
 
 
 if __name__ == "__main__":
-    torque_path1 = "data/test1203/0.npy"
-    torque_path2 = "data/test1203/5.npy"
-    vis_joint_torques(torque_path2)
-    vis_joint_pos_delta(torque_path1, torque_path2)
-    # urdf_path = 'spot_description/spot.urdf'
-    # # joint_locations = get_joint_locations(urdf_path)
-    # get_joint_positions(urdf_path)
-
-
-    # load_spot_with_red_dots()
-    # urdf_path = 'spot_description/spot.urdf'
-
-
-    # robot = URDF.load('spot_description/spot.urdf')
-    # joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
-    # link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
-    # trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
-    # robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
-    # marker_positions = {
-    #     "front": [0.445, 0.0, 0.05],  # Front
-    #     "back": [-0.42, 0.0, 0.02],  # Back
-    #     "right": [0.0, 0.11, 0.0],  # Right
-    #     "left": [0.0, -0.11, 0.0],  # Left
-    # }
-    # evenly pick 30 positions with z = 0.08, x in [-0.8, 0.8], y in [-0.2, 0.2]
-    # top_markers = np.array([[random.uniform(-0.8, 0.8), random.uniform(-0.2, 0.2), 0.08] for _ in range(30)])
-    # red_markers = create_red_markers([top_markers], radius = 0.01)
-    # visualize_robot_with_markers(robot_meshes, red_markers)
-    # o3d.visualization.draw_geometries(robot_meshes + red_markers)
-    # for place, marker in marker_positions.items():
-    #     red_markers = create_red_markers([marker], radius = 0.01)
-    #     print(f"PLEASE TOUCH SPOT AT {place.upper()}\n")
-    #     o3d.visualization.draw_geometries(robot_meshes + red_markers)
-        # get today's date
-        # today = datetime.today().strftime('%Y%m%d')
-        # collect_data(f"data/{today}/{place}.npy")
-        # collect_data(f"data/20241120/test.npy")
+    # vis_joint_torques(torque_path2)
+    vis_joint_pos(["data/gouger1209/0/no_contact.npy"])
+    vis_joint_pos(["data/gouger1209/0/95.npy"])
+    vis_joint_torques("data/gouger1209/0/no_contact.npy")
+    vis_joint_torques("data/gouger1209/0/95.npy")
+    
+    # vis_joint_pos_delta(torque_path1, torque_path2)
 
 

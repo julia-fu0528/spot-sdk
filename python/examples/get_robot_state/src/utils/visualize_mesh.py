@@ -70,7 +70,7 @@ def visualize_with_camera(geometries, camera_params):
         camera_params: Camera parameters from create_viewing_parameters
     """
     vis = o3d.visualization.Visualizer()
-    vis.create_window()
+    vis.create_window(width=2048, height=1500)
     
     # Add geometries
     for geometry in geometries:

@@ -182,25 +182,25 @@ def main():
 
      # Load marker positions
     markers_path = options.markers_path
-    # markers_pos = np.loadtxt(markers_path, delimiter=",")
-    markers_pos = [
-        # front
-        [0.45, 0.06, -0.035],
-        [0.45, -0.07, -0.035],
-        # back
-        [-0.45, 0.05, 0.05],
-        [-0.45, -0.05, 0.05],
-        # left
-        [0.13, 0.14, 0.01],
-        [-0.13, 0.14, -0.01],
-        # right
-        [0.1, -0.15, -0.01],
-        [-0.13, -0.14, -0.01],
-        # top
-        [0.1, 0.05, 0.09],
-        [-0.12, -0.01, 0.09],
-    ]
-    markers_pos, pos_indices = find_closest_vertices(robot_meshes[0].vertices, markers_pos)
+    markers_pos = np.loadtxt(markers_path, delimiter=",")
+    # markers_pos = [
+    #     # front
+    #     [0.45, 0.06, -0.035],
+    #     [0.45, -0.07, -0.035],
+    #     # back
+    #     [-0.45, 0.05, 0.05],
+    #     [-0.45, -0.05, 0.05],
+    #     # left
+    #     [0.13, 0.14, 0.01],
+    #     [-0.13, 0.14, -0.01],
+    #     # right
+    #     [0.1, -0.15, -0.01],
+    #     [-0.13, -0.14, -0.01],
+    #     # top
+    #     [0.1, 0.05, 0.09],
+    #     [-0.12, -0.01, 0.09],
+    # ]
+    # markers_pos, pos_indices = find_closest_vertices(robot_meshes[0], markers_pos)
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"Loaded marker positions: {len(marker_positions)}")
 
@@ -235,11 +235,14 @@ def main():
     delta_T = 1/freq
     tao = 1
     alpha = 1 - np.exp(-delta_T/tao)
-    num_rows = 20
+    print(f"alpha: {alpha}")
+    alpha = 0.1
+    num_rows = 10
     buffer = np.zeros((num_rows, 24))
     weights = np.power((1 - alpha), np.arange(num_rows))
     weights = alpha * weights
     weights = weights / np.sum(weights)
+    print(f"weights: {weights}")
     try:
         while True:
             # Collect real-time data
@@ -247,10 +250,13 @@ def main():
             # time.sleep(5)
             # data = collect_realtime_data(robot_state_client, 5)
             state = robot_state_client.get_robot_state()
+            # print(f"previous buffer:{buffer}")
             buffer = np.roll(buffer, 1, axis=0) # shift the buffer
 
             # EMA moving average: exponential/linear/etc.
             buffer[0] = preprocess_realtime_data(state, np.zeros(12), markers_path)
+            # print(f"current buffer:{buffer}")
+            # sys.exit()
             # processed_data = np.mean(buffer, axis=0) 
             processed_data = np.dot(weights, buffer).reshape(-1, 24)
             # Preprocess the data for inference
@@ -261,7 +267,7 @@ def main():
             # Perform inference
             predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            if predicted_class == "no_contact" or confidence < 0.5:
+            if predicted_class == "no_contact" or confidence < 0.6:
                 pos = [0, 0, 0]
                 print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
                 # continue

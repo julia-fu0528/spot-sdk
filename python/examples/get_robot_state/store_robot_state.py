@@ -145,8 +145,8 @@ def main():
     # o3d.visualization.draw_geometries(robot_meshes + markers)
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
-    print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
-    collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
+    # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
+    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
     # os.makedirs("data/test1203", exist_ok=True)
     for idx, pos in marker_positions.items():
         if int(idx)<10:

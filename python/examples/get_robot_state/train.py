@@ -34,7 +34,7 @@ def load_data(torque_dir, class_to_index):
     # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offsett
     min_length = np.inf
     print(f"torque_dir: {torque_dir}")
-    for torque_file in natsorted(os.listdir(torque_dir)):
+    for i, torque_file in enumerate(natsorted(os.listdir(torque_dir))):
         if torque_file.endswith(".npy"):
             torque_path = os.path.join(torque_dir, torque_file)
             class_name = torque_file.split(".")[0]  # Extract label from the filename
@@ -42,14 +42,17 @@ def load_data(torque_dir, class_to_index):
                 torque, _, _, _ = load_joint_torques(torque_path)
                 if torque.shape[0]  < min_length:
                     min_length = torque.shape[0]
+                    print(f"new min length: {min_length}")
                 joint_angle, _, _, _ = load_joint_positions(torque_path)
                 # torque = torque - offset  # Subtract offset
                 # normalized_torque = 2 * ((torque - torque.min()) / (torque.max() - torque.min())) - 1
                 # data = np.hstack((normalized_torque, joint_angle))
                 data = np.hstack((torque, joint_angle))
+                # print(f"torque file: {torque_file}, data.shape: {data.shape}")
                 normalized_data = 2 * ((data - data.min()) / (data.max() - data.min())) - 1
                 # torque_data.append(normalized_torque)
                 training_data.append(normalized_data)
+                # print(f"training_data.shape: {training_data[-1].shape}")
                 # torque_data.append(torque) 
                 # labels.append(class_name * len(torque))
                 labels.append([class_to_index[class_name]] * len(torque))  # Map class name to index
@@ -65,6 +68,7 @@ def load_data(torque_dir, class_to_index):
     labels = np.array(labels)
     # print(f"labels: {labels}")
     print(f"training_data.shape: {training_data.shape}")
+    # sys.exit()
     return training_data, labels
 
 def preprocess(torque_dir, classes):
@@ -72,12 +76,15 @@ def preprocess(torque_dir, classes):
     # count the number of directories in torque_dir
     num_dir = len([name for name in os.listdir(torque_dir) if os.path.isdir(os.path.join(torque_dir, name))])
     print(f"num_dir: {num_dir}")
+    num_dir = 9
     # randomly pick a number from 0 to num_dir
-    val_idx = random.randint(0, num_dir)
+    # val_idx = random.randint(0, num_dir)
+    val_indices = random.sample(range(num_dir), 2)
     train_dirs = []
-    for idx, dir in enumerate(natsorted(os.listdir(torque_dir))):
+    for idx, dir in enumerate(natsorted(os.listdir(torque_dir))[:10]):
         if os.path.isdir(os.path.join(torque_dir, dir)):
-            if idx == val_idx:
+            # if idx == val_idx:
+            if idx in val_indices:
                 val_dir = os.path.join(torque_dir, dir)
             else:
                 train_dirs.append(os.path.join(torque_dir, dir))
@@ -92,8 +99,14 @@ def preprocess(torque_dir, classes):
             X_train = training_data
             y_train = labels
     X_val, y_val = load_data(val_dir, class_to_index)
-    print(f"X_train.shape: {X_train.shape}, y_train.shape: {y_train.shape}")
-    print(f"X_val.shape: {X_val.shape}, y_val.shape: {y_val.shape}")
+    X_all, y_all = np.append(X_train, X_val, axis=1), np.append(y_train, y_val, axis=1)
+    print(f"X_all.shape: {X_all.shape}, y_all.shape: {y_all.shape}")
+    len_data = X_all.shape[1]
+    train_idx = random.sample(range(len_data), int(0.8 * len_data))
+    X_train, y_train = X_all[:, train_idx, :], y_all[:, train_idx]
+    val_idx = list(set(range(len_data)) - set(train_idx))
+    X_val, y_val = X_all[:, val_idx, :], y_all[:, val_idx]
+    # sys.exit()
     # torque_data, labels = load_data(torque_dir, class_to_index)
 
     # One-hot encode labels
@@ -133,7 +146,7 @@ def create_model(input_shape, num_classes):
         Flatten(),                     # Flatten the input
         Dense(64, activation='relu'), # Hidden layer with 128 neurons
         Dense(128, activation='relu'),  # Hidden layer with 64 neurons
-        Dense(64, activation='relu'),
+        Dense(256, activation='relu'),
         Dense(num_classes, activation='softmax')  # Output layer
     ])
     return model
@@ -148,8 +161,8 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
 
     # Compile the model
     model.compile(
-        # optimizer=tf.keras.optimizers.Adam(learning_rate=3e-5),# 5e-4
-        optimizer='adam',
+        optimizer=tf.keras.optimizers.Adam(learning_rate=5e-4),# 5e-4
+        # optimizer='adam',
         loss='categorical_crossentropy',  # Cross-entropy loss for classification
         metrics=['accuracy']
     )
@@ -171,7 +184,7 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
     history = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
-        epochs=50,                     # Number of epochs
+        epochs=70,                     # Number of epochs
         batch_size=32,                 # Batch size
         callbacks=[
             tensorboard_callback,
