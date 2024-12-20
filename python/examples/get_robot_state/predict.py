@@ -106,9 +106,8 @@ def infer_realtime(model, data, classes):
     
     # Get predictions (shape: [num_samples, num_classes])
     predictions = model.predict(data)
-    # print(f"Predictions shape: {predictions.shape}")
-    
-    if len(predictions.shape) == 2:  # Multiple samples
+
+    if predictions.shape[0] == 2:  # Multiple samples
         # mean_probabilities = np.mean(predictions, axis=0)
         # predicted_class_index = np.argmax(mean_probabilities)
         # confidence = np.max(mean_probabilities)
@@ -231,17 +230,17 @@ def main():
         # vis.update_geometry(marker)
         # vis.poll_events()
         # vis.update_renderer()
-    freq = 60
-    delta_T = 1/freq
-    tao = 1
-    alpha = 1 - np.exp(-delta_T/tao)
-    print(f"alpha: {alpha}")
-    alpha = 0.8
-    num_rows = 100
-    buffer = np.zeros((num_rows, 24))
-    weights = np.power((1 - alpha), np.arange(num_rows))
+    # freq = 60
+    # delta_T = 1/freq
+    # tao = 1
+    # alpha = 1 - np.exp(-delta_T/tao)
+    # print(f"alpha: {alpha}")
+    alpha = 0.6
+    sliding_win = 50
+    buffer = np.zeros((sliding_win, 24))
+    weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
-    weights = weights / np.sum(weights)
+    # weights = weights / np.sum(weights) normalize??
     print(f"weights: {weights}")
     try:
         while True:
@@ -267,7 +266,7 @@ def main():
             # Perform inference
             predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            if predicted_class == "no_contact" or confidence < 1:
+            if predicted_class == "no_contact" or confidence < 0.1:
                 pos = [0, 0, 0]
                 print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
                 # continue
