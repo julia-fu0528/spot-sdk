@@ -235,9 +235,10 @@ def main():
     # tao = 1
     # alpha = 1 - np.exp(-delta_T/tao)
     # print(f"alpha: {alpha}")
-    alpha = 0.6
-    sliding_win = 50
-    buffer = np.zeros((sliding_win, 24))
+    alpha = 0.2
+    sliding_win = 20
+    # buffer = np.zeros((sliding_win, 24))
+    buffer = np.zeros((sliding_win, 101))
     weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
     # weights = weights / np.sum(weights) normalize??
@@ -249,22 +250,20 @@ def main():
             # time.sleep(5)
             # data = collect_realtime_data(robot_state_client, 5)
             state = robot_state_client.get_robot_state()
-            # print(f"previous buffer:{buffer}")
-            buffer = np.roll(buffer, 1, axis=0) # shift the buffer
 
-            # EMA moving average: exponential/linear/etc.
-            buffer[0] = preprocess_realtime_data(state, np.zeros(12), markers_path)
-            # print(f"current buffer:{buffer}")
-            # sys.exit()
-            # processed_data = np.mean(buffer, axis=0) 
-            processed_data = np.dot(weights, buffer).reshape(-1, 24)
             # Preprocess the data for inference
-            # processed_data = preprocess_realtime_data(data, offset, markers_path)
-            # processed_data = preprocess_realtime_data(state, np.zeros(12), markers_path)
+            processed_data = preprocess_realtime_data(state, np.zeros(12), markers_path)
             print(f"Processed data shape: {processed_data.shape}")
 
             # Perform inference
-            predicted_class, confidence = infer_realtime(model, processed_data, classes)
+            buffer = np.roll(buffer, 1, axis=0) # shift the buffer
+            # EMA moving average: exponential/linear/etc.
+            buffer[0] = model.predict(processed_data)
+            predictions = np.dot(weights, buffer).reshape(-1, 101)
+            predicted_class_index = np.argmax(predictions)
+            confidence = np.max(predictions)
+            predicted_class = classes[predicted_class_index]
+            # predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
             if predicted_class == "no_contact" or confidence < 0.1:
                 pos = [0, 0, 0]
