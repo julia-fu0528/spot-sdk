@@ -235,8 +235,8 @@ def main():
     # tao = 1
     # alpha = 1 - np.exp(-delta_T/tao)
     # print(f"alpha: {alpha}")
-    alpha = 0.2
-    sliding_win = 20
+    alpha = 0.01
+    sliding_win = 10
     # buffer = np.zeros((sliding_win, 24))
     buffer = np.zeros((sliding_win, 101))
     weights = np.power((1 - alpha), np.arange(sliding_win))
@@ -265,7 +265,8 @@ def main():
             predicted_class = classes[predicted_class_index]
             # predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            if predicted_class == "no_contact" or confidence < 0.1:
+            if predicted_class == "no_contact" :
+            # or confidence < 0.1:
                 pos = [0, 0, 0]
                 print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
                 # continue

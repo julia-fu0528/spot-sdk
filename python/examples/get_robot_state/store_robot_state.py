@@ -141,9 +141,8 @@ def main():
     markers_pos = np.loadtxt(markers_path, delimiter=",")
     print("Loaded markers positions: ", markers_pos)
     print(f"Total number of markers: {len(markers_pos)}")
-    markers = create_red_markers(markers_pos, radius=0.02)
-    o3d.visualization.draw_geometries(robot_meshes + markers[26:28])
-    sys.exit()
+    # markers = create_red_markers(markers_pos, radius=0.02)
+    # o3d.visualization.draw_geometries(robot_meshes + markers[26:28])
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
     # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
