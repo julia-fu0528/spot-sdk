@@ -5,10 +5,12 @@ import numpy as np
 import open3d as o3d
 from pathlib import Path
 from collections import Counter
+from scipy.spatial import cKDTree
 from natsort import natsorted
 from urdfpy import URDF
 import tensorflow as tf
 from tensorflow.keras.models import load_model
+from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 from visualize_robot_state import create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
 
@@ -219,10 +221,10 @@ def main():
     # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
     vis = o3d.visualization.Visualizer() 
     vis.create_window()
-    marker = create_red_markers([[0, 0, 0.075]], radius=0.07)[0]
+    # marker = create_red_markers([[0, 0, 0.075]], radius=0.07)[0]
     for robot_mesh in robot_meshes:
         vis.add_geometry(robot_mesh)
-    vis.add_geometry(marker)
+    # vis.add_geometry(marker)
     # for i in range(icp_iteration):
     # while True:
         # do ICP single iteration
@@ -243,6 +245,13 @@ def main():
     weights = alpha * weights
     # weights = weights / np.sum(weights) normalize??
     print(f"weights: {weights}")
+
+    original_vertex_colors = np.asarray(robot_meshes[0].vertex_colors).copy()
+
+    vertices = np.asarray(robot_meshes[0].vertices)
+    # sampled_points = sample_points_from_mesh(np.asarray(robot_meshes[0].vertices), np.asarray(robot_meshes[0].triangles), 10000)
+    kdtree = cKDTree(vertices)
+
     try:
         while True:
             # Collect real-time data
@@ -265,22 +274,31 @@ def main():
             predicted_class = classes[predicted_class_index]
             # predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
+            np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
             if predicted_class == "no_contact" :
             # or confidence < 0.1:
                 pos = [0, 0, 0]
                 print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
                 # continue
+
             # Visualize the prediction
             # visualize_prediction(marker_positions, predicted_class, robot_meshes)
             else:
                 pos = marker_positions.get(predicted_class)
+
+                radius = 0.05
+                indices = kdtree.query_ball_point(pos, radius)
+                colors = np.asarray(robot_meshes[0].vertex_colors)
+                colors[indices] = [1, 0, 0]
+                robot_meshes[0].vertex_colors = o3d.utility.Vector3dVector(colors)
                 # R = np.eye(3)
                 # T = np.eye(4)
                 # T[:3, :3] = R 
                 # T[:3, 3] = pos
             # marker.translate(pos - marker.get_center(), relative=False)
-            marker.translate(pos, relative=False)
-            vis.update_geometry(marker)
+            # marker.translate(pos, relative=False)
+            vis.update_geometry(robot_meshes[0])
+            # vis.update_geometry(marker)
             vis.poll_events()
             vis.update_renderer()
             # Add user prompt to continue or exit

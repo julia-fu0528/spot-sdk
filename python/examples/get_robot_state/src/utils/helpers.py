@@ -1,4 +1,5 @@
 import numpy as np
+import open3d as o3d
 
 def sample_points_from_mesh(vertices, faces, num_points):
     # Compute triangle areas
@@ -30,3 +31,4 @@ def sample_points_from_mesh(vertices, faces, num_points):
 
     points = u[:, None] * p1 + v[:, None] * p2 + w[:, None] * p3
     return points
+
