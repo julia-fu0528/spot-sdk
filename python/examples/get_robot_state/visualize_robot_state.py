@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 import json
 import numpy as np
+from natsort import natsorted
 # import pybullet as p
 import matplotlib.pyplot as plt
 import os
@@ -145,16 +146,17 @@ def vis_joint_torques(torque_path_list):
     time_steps = np.arange(total_entries)
 
     for j in range(num_joints):
-        plt.plot(time_steps, torque_data[:, j], label=f'Joint {joint_names[j]}')
+        plt.plot(time_steps, all_torque_data[:, j], label=f'Joint {joint_names[j]}')
 
     # Add labels and legend
     plt.xlabel("Time")
     plt.ylabel("Torque")
-    plt.title(f"Torque Over Time for Each Joint for {torque_path.split('.')[0]}")
+    # plt.title(f"Torque Over Time for Each Joint for {torque_path.split('.')[0]}")
+    plt.title(f"Torque Over Time for Each Joint")
     plt.legend()
     plt.grid(True)
 
-    output_dir = f"vis/1219/{torque_path.split('.')[0].split('/')[-2]}"
+    output_dir = f"vis/1219/{torque_path_list[0].split('.')[0].split('/')[-2]}"
     os.makedirs(output_dir, exist_ok=True)
     save_path = os.path.join(output_dir, f"{torque_path.split('.')[0].split('/')[-1]}_torque.png")
     print(f"save_path: {save_path}")
@@ -166,6 +168,7 @@ def vis_joint_torques(torque_path_list):
 def vis_joint_pos(joint_pos_path_list):
     all_joint_pos_data = None
     total_entries = 0
+    num_joints = 0
     for joint_pos_path in joint_pos_path_list:
         joint_pos_data, num_entries, num_joints, joint_names = load_joint_positions(joint_pos_path)
         total_entries += num_entries
@@ -187,10 +190,9 @@ def vis_joint_pos(joint_pos_path_list):
     plt.title("Joint Position Over Time for Each Joint")
     plt.legend()
     plt.grid(True)
-
     output_dir = f"vis/1219/{joint_pos_path_list[0].split('.')[0].split('/')[-2]}"
     os.makedirs(output_dir, exist_ok=True)
-    save_path = os.path.join(output_dir, f"{joint_pos_path_list[0].split('.')[0].split('/')[-1]}.png")
+    save_path = os.path.join(output_dir, f"{joint_pos_path_list[0].split('.')[0].split('/')[-1]}_joint.png")
     print(f"save_path: {save_path}")
     plt.savefig(save_path, format="png", dpi=300)  # Save as a PNG file with 300 dpi resolution
 
@@ -601,10 +603,26 @@ def visualize_robot_with_markers(robot_meshes, marker_positions):
 
 if __name__ == "__main__":
     # vis_joint_torques(torque_path2)
-    vis_joint_pos(["data/gouger1209/0/no_contact.npy"])
-    vis_joint_pos(["data/gouger1209/0/95.npy"])
-    vis_joint_torques("data/gouger1209/0/no_contact.npy")
-    vis_joint_torques("data/gouger1209/0/95.npy")
+
+    # all directories in data/gouger1209
+    all_dir = natsorted(os.listdir("data/gouger1209"))
+    all_dir = [os.path.join("data/gouger1209", dir) for dir in all_dir]
+    all_files = []
+    for directory in all_dir:
+        files = os.listdir(directory)
+        all_files.extend([os.path.join(directory, file) for file in files])
+    print(f"len all_files: {len(all_files)}")
+    no_contact_files = [f for f in all_files if "no_contact.npy" in f]
+    print(f"no_contact_files: {no_contact_files}")
+    # all files that are named 95.npy
+    files_95 = [f for f in all_files if "95.npy" in f]
+    files_26 = [f for f in all_files if "26.npy" in f]
+    # vis_joint_pos(no_contact_files)
+    # vis_joint_pos(files_95)
+    vis_joint_pos(files_26)
+    # vis_joint_torques(no_contact_files)
+    # vis_joint_torques(files_95)
+    # vis_joint_torques(files_24)
     
     # vis_joint_pos_delta(torque_path1, torque_path2)
 

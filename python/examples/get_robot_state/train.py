@@ -109,10 +109,6 @@ def preprocess(torque_dir, classes):
     # sys.exit()
     # torque_data, labels = load_data(torque_dir, class_to_index)
 
-    # One-hot encode labels
-    y_train = to_categorical(y_train, num_classes=len(classes))
-    y_val = to_categorical(y_val, num_classes=len(classes))
-
     # Split the second dimension (time steps)
     # time_steps = torque_data.shape[1]
     # split_index = int(0.8 * time_steps)
@@ -124,19 +120,9 @@ def preprocess(torque_dir, classes):
     # X_train = torque_data[:, train_idx, :]
     # X_val = torque_data[:, val_idx, :]
     
-    # Reshape X data
-    X_train = X_train.reshape(-1, X_train.shape[-1])  # Combine batch and time dimensions
-    X_val = X_val.reshape(-1, X_val.shape[-1])
-    
     # Reshape y data to match X
     # y_train = labels_one_hot[:, train_idx, :].reshape(-1, labels_one_hot.shape[-1])
     # y_val = labels_one_hot[:, val_idx, :].reshape(-1, labels_one_hot.shape[-1])
-    X_train = X_train.reshape(-1, X_train.shape[-1])
-    X_val = X_val.reshape(-1, X_val.shape[-1])
-    y_train = y_train.reshape(-1, y_train.shape[-1])
-    y_val = y_val.reshape(-1, y_val.shape[-1])
-    print(f"X_train.shape: {X_train.shape}, y_train.shape: {y_train.shape}")
-    print(f"X_val.shape: {X_val.shape}, y_val.shape: {y_val.shape}")
     return X_train, X_val, y_train, y_val
 
 
@@ -268,7 +254,7 @@ def plot_tsne(X, y, classes, save_path=None):
     scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], 
                          c=y_classes, 
                          cmap='tab10',
-                         alpha=0.6)
+                         alpha=1)
     
     # Add legend
     legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
@@ -319,6 +305,7 @@ if __name__ == "__main__":
     torque_files = natsorted(torque_files)
     # get all the file names
     classes = [f.split('.')[0] for f in torque_files]
+    # classes = ['no_contact', '95', '24', '8']
     print(f"class: {classes}")
     model_dir = os.path.join(folder_path, model_dir, session)
     log_dir = os.path.join(folder_path, log_dir, session)
@@ -335,9 +322,84 @@ if __name__ == "__main__":
 
 
     # classes = ['no_contact', 'front', 'back', 'left', 'right']  # Define your classes
+    print(f"torque_dir: {torque_dir}")
     X_train, X_val, y_train, y_val = preprocess(torque_dir, classes)
+    # add no contact
+    class_to_index = {cls: idx for idx, cls in enumerate(classes)}
+    extra_dirs = [name for name in natsorted(os.listdir(torque_dir)) if os.path.isdir(os.path.join(torque_dir, name))][10:20]
+    val_indices = random.sample(range(10, 20), 2)
+    train_dirs = []
+    val_dirs = []
+    for idx, dir in enumerate(natsorted(os.listdir(torque_dir))[10:20]):
+        if os.path.isdir(os.path.join(torque_dir, dir)):
+            # if idx == val_idx:
+            if idx+10 in val_indices:
+                val_dirs.append(os.path.join(torque_dir, dir))
+            else:
+                train_dirs.append(os.path.join(torque_dir, dir))
+    X_train = [sequence for sequence in X_train] 
+    y_train = [sequence for sequence in y_train]
+    X_val = [sequence for sequence in X_val]
+    y_val = [sequence for sequence in y_val]
+    for train_dir in train_dirs:
+        classes = ['no_contact']
+        training_data, labels = load_data(train_dir, class_to_index)
+        X_train[-1] = np.concatenate((X_train[-1], training_data[0]), axis=0)
+        y_train[-1] = np.concatenate((y_train[-1], labels[0]), axis=0)
+    for val_dir in val_dirs:
+        val_data, val_labels = load_data(val_dir, class_to_index)
+        X_val[-1] = np.concatenate((X_val[-1], val_data[0]), axis=0)
+        y_val[-1] = np.concatenate((y_val[-1], val_labels[0]), axis=0)
+
+    # X_train = np.array(X_train)
+    # y_train = np.array(y_train)
+    # X_val = np.array(X_val)
+    # y_val = np.array(y_val)
+    # One-hot encode labels
+    classes = [f.split('.')[0] for f in torque_files]
+    X_train_nc = X_train[-1]
+    y_train_nc = to_categorical(y_train[-1], num_classes = len(classes))
+    X_val_nc = X_val[-1]
+    y_val_nc = to_categorical(y_val[-1], num_classes = len(classes))
+    X_train = np.array(X_train[:-1])
+    y_train = np.array(y_train[:-1])
+    X_val = np.array(X_val[:-1])
+    y_val = np.array(y_val[:-1])
+    
+    y_train = to_categorical(y_train, num_classes=len(classes))
+    y_val = to_categorical(y_val, num_classes=len(classes))
+    
+    # Reshape X data
+    X_train = X_train.reshape(-1, X_train.shape[-1])  # Combine batch and time dimensions
+    X_val = X_val.reshape(-1, X_val.shape[-1])
     print(f"X_train.shape: {X_train.shape}, y_train.shape: {y_train.shape}")
     print(f"X_val.shape: {X_val.shape}, y_val.shape: {y_val.shape}")
+    # X_train = X_train.reshape(-1, X_train.shape[-1])
+    print(f"X_train_nc.shape: {X_train_nc.shape}, y_train_nc.shape: {y_train_nc.shape}")
+    # X_train = [sequence for sequence in X_train] 
+    # X_val = [sequence for sequence in X_val]
+    # X_train_nc = np.expand_dims(X_train_nc, axis=0)
+    # X_val_nc = np.expand_dims(X_val_nc, axis=0)
+    # print(f"X_train_nc.shape: {X_train_nc.shape}, y_train_nc.shape: {y_train_nc.shape}")
+
+    # X_train.concat(X_train_nc)
+    # X_val.concat(X_val_nc)
+    # print(f"X_train.shape: {len(X_train)}, y_train.shape: {len(y_train)}")
+    X_train = np.concatenate((X_train, X_train_nc), axis=0)
+    # X_val = X_val.reshape(-1, X_val.shape[-1])
+    X_val = np.concatenate((X_val, X_val_nc), axis=0)
+    y_train = y_train.reshape(-1, y_train.shape[-1])
+    y_train = np.concatenate((y_train, y_train_nc), axis=0)
+    y_val = y_val.reshape(-1, y_val.shape[-1])
+    y_val = np.concatenate((y_val, y_val_nc), axis=0)
+    print(f"X_train.shape: {X_train.shape}, y_train.shape: {y_train.shape}")
+    print(f"X_val.shape: {X_val.shape}, y_val.shape: {y_val.shape}")
+    
+    # X_train = np.concatenate((X_train, new_X_train), axis=1)
+    # y_train = np.concatenate((y_train, new_y_train), axis=1)
+    # X_val = np.concatenate((X_val, new_X_val), axis=1)
+    # y_val = np.concatenate((y_val, new_y_val), axis=1)
+    
      # Create t-SNE visualization before training
     # print("Creating t-SNE visualization of training data...")
     # tsne_path = os.path.join(plots_dir, 'tsne_visualization.png')

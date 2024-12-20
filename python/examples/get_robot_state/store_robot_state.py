@@ -142,7 +142,8 @@ def main():
     print("Loaded markers positions: ", markers_pos)
     print(f"Total number of markers: {len(markers_pos)}")
     markers = create_red_markers(markers_pos, radius=0.02)
-    # o3d.visualization.draw_geometries(robot_meshes + markers)
+    o3d.visualization.draw_geometries(robot_meshes + markers[26:28])
+    sys.exit()
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
     # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
