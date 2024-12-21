@@ -222,16 +222,18 @@ def main():
     # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
     vis = o3d.visualization.Visualizer() 
     vis.create_window()
-    # marker = create_red_markers([[0, 0, 0.075]], radius=0.07)[0]
-    for robot_mesh in robot_meshes:
-        vis.add_geometry(robot_mesh)
+    radius = 0.1
+    marker = create_red_markers([[0, 0, 0.075]], radius=radius)[0]
+    # for robot_mesh in robot_meshes:
+    #     vis.add_geometry(robot_mesh)
     total_mesh = o3d.geometry.TriangleMesh()
 
     for mesh in robot_meshes:
        total_mesh += mesh
-    o3d.visualization.draw_geometries([total_mesh])
-    sys.exit()
-    # vis.add_geometry(marker)
+    vis.add_geometry(total_mesh)
+    # o3d.visualization.draw_geometries([total_mesh])
+    # sys.exit()
+    vis.add_geometry(marker)
     # for i in range(icp_iteration):
     # while True:
         # do ICP single iteration
@@ -253,15 +255,15 @@ def main():
     # weights = weights / np.sum(weights) normalize??
     print(f"weights: {weights}")
 
-    original_vertex_colors = np.asarray(robot_meshes[0].vertex_colors).copy()
+    original_vertex_colors = np.asarray(total_mesh.vertex_colors).copy()
    
     # Add the combined mesh to the visualizer
     # vis.add_geometry(total_mesh)
-    body_mesh = robot_meshes[0]
+    # body_mesh = robot_meshes[0]
     # body_mesh = body_mesh.filter_smooth_taubin(number_of_iterations=5)
     # body_mesh.compute_vertex_normals()
     # sys.exit()
-    vertices = np.asarray(body_mesh.vertices)
+    vertices = np.asarray(total_mesh.vertices)
     # sampled_points = sample_points_from_mesh(np.asarray(robot_meshes[0].vertices), np.asarray(robot_meshes[0].triangles), 10000)
     kdtree = cKDTree(vertices)
 
@@ -287,7 +289,7 @@ def main():
             predicted_class = classes[predicted_class_index]
             # predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            body_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
+            total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
             # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
             if predicted_class == "no_contact" :
             # or confidence < 0.1:
@@ -300,18 +302,19 @@ def main():
             else:
                 pos = marker_positions.get(predicted_class)
 
-                radius = 0.05
                 indices = kdtree.query_ball_point(pos, radius)
-                colors = np.asarray(body_mesh.vertex_colors)
+                colors = np.asarray(total_mesh.vertex_colors)
                 colors[indices] = [1, 0, 0]
-                body_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+                total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+
                 # R = np.eye(3)
                 # T = np.eye(4)
                 # T[:3, :3] = R 
                 # T[:3, 3] = pos
             # marker.translate(pos - marker.get_center(), relative=False)
-            # marker.translate(pos, relative=False)
-            vis.update_geometry(body_mesh)
+            marker.translate(pos, relative=False)
+            vis.update_geometry(total_mesh)
+            vis.update_geometry(marker)
             # vis.update_geometry(marker)
             vis.poll_events()
             vis.update_renderer()
