@@ -80,7 +80,7 @@ def main():
     link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
     trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
     robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
-    # combined_robot_mesh = combine_meshes_o3d(robot_meshes)
+    combined_robot_mesh = combine_meshes_o3d(robot_meshes)
     # markers_pos = [
     #     # front
     #     [0.45, 0.06, -0.035],

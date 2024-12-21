@@ -12,7 +12,7 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
-from visualize_robot_state import create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
+from visualize_robot_state import combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
 
 def collect_realtime_data(robot_state_client, duration=2):
     """
@@ -168,18 +168,19 @@ def main():
     model = load_model(options.model_path)
     print("Model loaded successfully.")
 
-    # Initialize robot and client
-    sdk = create_standard_sdk('RobotStateClient')
-    robot = sdk.create_robot(options.hostname)
-    bosdyn.client.util.authenticate(robot)
-    robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
-
-    # Load robot meshes for visualization
+     # Load robot meshes for visualization
     robot_obj = URDF.load('spot_description/spot.urdf')
     joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}  # Zero configuration
     link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
     trimesh_fk = prepare_trimesh_fk(robot_obj, link_fk_transforms)
     robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+
+
+    # Initialize robot and client
+    sdk = create_standard_sdk('RobotStateClient')
+    robot = sdk.create_robot(options.hostname)
+    bosdyn.client.util.authenticate(robot)
+    robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
 
      # Load marker positions
     markers_path = options.markers_path
@@ -224,6 +225,12 @@ def main():
     # marker = create_red_markers([[0, 0, 0.075]], radius=0.07)[0]
     for robot_mesh in robot_meshes:
         vis.add_geometry(robot_mesh)
+    total_mesh = o3d.geometry.TriangleMesh()
+
+    for mesh in robot_meshes:
+       total_mesh += mesh
+    o3d.visualization.draw_geometries([total_mesh])
+    sys.exit()
     # vis.add_geometry(marker)
     # for i in range(icp_iteration):
     # while True:
@@ -247,8 +254,14 @@ def main():
     print(f"weights: {weights}")
 
     original_vertex_colors = np.asarray(robot_meshes[0].vertex_colors).copy()
-
-    vertices = np.asarray(robot_meshes[0].vertices)
+   
+    # Add the combined mesh to the visualizer
+    # vis.add_geometry(total_mesh)
+    body_mesh = robot_meshes[0]
+    # body_mesh = body_mesh.filter_smooth_taubin(number_of_iterations=5)
+    # body_mesh.compute_vertex_normals()
+    # sys.exit()
+    vertices = np.asarray(body_mesh.vertices)
     # sampled_points = sample_points_from_mesh(np.asarray(robot_meshes[0].vertices), np.asarray(robot_meshes[0].triangles), 10000)
     kdtree = cKDTree(vertices)
 
@@ -274,7 +287,8 @@ def main():
             predicted_class = classes[predicted_class_index]
             # predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
+            body_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
+            # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
             if predicted_class == "no_contact" :
             # or confidence < 0.1:
                 pos = [0, 0, 0]
@@ -288,16 +302,16 @@ def main():
 
                 radius = 0.05
                 indices = kdtree.query_ball_point(pos, radius)
-                colors = np.asarray(robot_meshes[0].vertex_colors)
+                colors = np.asarray(body_mesh.vertex_colors)
                 colors[indices] = [1, 0, 0]
-                robot_meshes[0].vertex_colors = o3d.utility.Vector3dVector(colors)
+                body_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
                 # R = np.eye(3)
                 # T = np.eye(4)
                 # T[:3, :3] = R 
                 # T[:3, 3] = pos
             # marker.translate(pos - marker.get_center(), relative=False)
             # marker.translate(pos, relative=False)
-            vis.update_geometry(robot_meshes[0])
+            vis.update_geometry(body_mesh)
             # vis.update_geometry(marker)
             vis.poll_events()
             vis.update_renderer()
