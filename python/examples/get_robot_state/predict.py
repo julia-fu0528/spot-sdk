@@ -8,6 +8,7 @@ from collections import Counter
 from scipy.spatial import cKDTree
 from natsort import natsorted
 from urdfpy import URDF
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from src.utils.helpers import sample_points_from_mesh
@@ -222,31 +223,37 @@ def main():
     # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
     vis = o3d.visualization.Visualizer() 
     vis.create_window()
-    radius = 0.1
-    marker = create_red_markers([[0, 0, 0.075]], radius=radius)[0]
+    radius = 0.04
+    # marker = create_red_markers([[0, 0, 0.075]], radius=radius)[0]
     # for robot_mesh in robot_meshes:
     #     vis.add_geometry(robot_mesh)
     total_mesh = o3d.geometry.TriangleMesh()
 
     for mesh in robot_meshes:
        total_mesh += mesh
+    point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
+    # sampled_points = sample_points_from_mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles), num_points)
+
+    # o3d.visualization.draw_geometries([point_cloud])
+    # sys.exit()
     vis.add_geometry(total_mesh)
+    vis.add_geometry(point_cloud)
     # o3d.visualization.draw_geometries([total_mesh])
     # sys.exit()
-    vis.add_geometry(marker)
+    # vis.add_geometry(marker)
     # for i in range(icp_iteration):
     # while True:
         # do ICP single iteration
         # transform geometry using ICP
         # vis.update_geometry(marker)
         # vis.poll_events()
-        # vis.update_renderer()
+        # vis.update_renderer()000
     # freq = 60
     # delta_T = 1/freq
     # tao = 1
     # alpha = 1 - np.exp(-delta_T/tao)
     # print(f"alpha: {alpha}")
-    alpha = 0.01
+    alpha = 0.1
     sliding_win = 10
     # buffer = np.zeros((sliding_win, 24))
     buffer = np.zeros((sliding_win, 101))
@@ -255,17 +262,32 @@ def main():
     # weights = weights / np.sum(weights) normalize??
     print(f"weights: {weights}")
 
-    original_vertex_colors = np.asarray(total_mesh.vertex_colors).copy()
+    original_point_colors = np.asarray(point_cloud.colors).copy()
+    # original_vertex_colors = np.asarray(total_mesh.vertex_colors).copy()
    
     # Add the combined mesh to the visualizer
-    # vis.add_geometry(total_mesh)
+    vis.add_geometry(total_mesh)
     # body_mesh = robot_meshes[0]
     # body_mesh = body_mesh.filter_smooth_taubin(number_of_iterations=5)
     # body_mesh.compute_vertex_normals()
     # sys.exit()
-    vertices = np.asarray(total_mesh.vertices)
+    pcd_points = np.asarray(point_cloud.points)
+    # vertices = np.asarray(total_mesh.vertices)
     # sampled_points = sample_points_from_mesh(np.asarray(robot_meshes[0].vertices), np.asarray(robot_meshes[0].triangles), 10000)
-    kdtree = cKDTree(vertices)
+    kdtree = cKDTree(pcd_points)
+    # pos = [0, 0, 0.075]
+    # indices = kdtree.query_ball_point(pos, radius)
+    # colors = np.asarray(point_cloud.colors)
+    # for idx in indices:
+    #     if 0 <= idx < len(colors):  # Validate index range
+    #         colors[idx] = [1, 0, 0]
+    # point_cloud.colors = o3d.utility.Vector3dVector(colors)
+    # added_geometries = []
+    # selected_points = point_cloud.select_by_index(indices)
+    # added_geometries.append(selected_points)
+    # vis.add_geometry(selected_points)
+
+    
 
     try:
         while True:
@@ -289,7 +311,11 @@ def main():
             predicted_class = classes[predicted_class_index]
             # predicted_class, confidence = infer_realtime(model, processed_data, classes)
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
+            # total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
+            point_cloud.colors = o3d.utility.Vector3dVector(original_point_colors)
+            # for geom in added_geometries:
+            #     vis.remove_geometry(geom)
+            # added_geometries = []
             # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
             if predicted_class == "no_contact" :
             # or confidence < 0.1:
@@ -303,21 +329,31 @@ def main():
                 pos = marker_positions.get(predicted_class)
 
                 indices = kdtree.query_ball_point(pos, radius)
-                colors = np.asarray(total_mesh.vertex_colors)
-                colors[indices] = [1, 0, 0]
-                total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
-
+                # colors = np.asarray(total_mesh.vertex_colors)
+                colors = np.asarray(point_cloud.colors)
+                # colors[indices] = [1, 0, 0]
+                for idx in indices:
+                    if 0 <= idx < len(colors):  # Validate index range
+                        colors[idx] = [1, 0, 0]
+                # selected_points = point_cloud.select_by_index(indices)
+                # added_geometries.append(selected_points)
+                # vis.add_geometry(selected_points)
+                # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+                point_cloud.colors = o3d.utility.Vector3dVector(colors)
+                # total_mesh.compute_vertex_normals()
                 # R = np.eye(3)
                 # T = np.eye(4)
                 # T[:3, :3] = R 
                 # T[:3, 3] = pos
             # marker.translate(pos - marker.get_center(), relative=False)
-            marker.translate(pos, relative=False)
-            vis.update_geometry(total_mesh)
-            vis.update_geometry(marker)
+            # marker.translate(pos, relative=False)
+            vis.update_geometry(point_cloud)
             # vis.update_geometry(marker)
+            # vis.update_geometry(marker)
+
             vis.poll_events()
             vis.update_renderer()
+
             # Add user prompt to continue or exit
             # user_input = input("Press 'Enter' to collect data again or 'q' to quit: ").strip().lower()
             # if user_input == 'q':
