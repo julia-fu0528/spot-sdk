@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
-from visualize_robot_state import combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
+from visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
 
 def collect_realtime_data(robot_state_client, duration=2):
     """
@@ -47,7 +47,6 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
     state_dict = data.kinematic_state.joint_states
         # torque_dict[i] = []
     torque_dict = []
-    joint_angles_dict = []
         # for joint in state_dict[i]:
     for joint in state_dict:
         joint_name = getattr(joint, 'name', None)
@@ -57,10 +56,6 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
                     'name': joint_name,
                     'position': joint.position.value,
                     'load': joint.load.value  # Assuming load has a 'value' attribute
-                })
-                joint_angles_dict.append({
-                    'name': joint_name,
-                    'angle': joint.position.value
                 })
     # num_entries = len(torque_dict)
     # num_joints = max(len(torque_dict[i]) for i in torque_dict)
@@ -94,8 +89,7 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
     # data = [torque_pos[:min_length] for torque_pos in data]
     data_processed = np.array(data)
 
-    return data_processed, joint_angles_dict
-
+    return data_processed
 
 # def infer_realtime(model, data, classes):
 #     """
@@ -178,8 +172,8 @@ def main():
     robot_obj = URDF.load('spot_description/spot.urdf')
     joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}  # Zero configuration
     link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
-    trimesh_fk = prepare_trimesh_fk(robot_obj, link_fk_transforms)
-    robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+    trimesh_fk, fk_meshes = prepare_trimesh_fk(robot_obj, link_fk_transforms)
+    robot_meshes, tm_to_o3d_map = convert_trimesh_to_open3d(trimesh_fk)
 
 
     # Initialize robot and client
@@ -294,7 +288,7 @@ def main():
     # original_vertex_colors = np.asarray(total_mesh.vertex_colors).copy()
    
     # Add the combined mesh to the visualizer
-    vis.add_geometry(total_mesh)
+    # vis.add_geometry(total_mesh)
     # body_mesh = robot_meshes[0]
     # body_mesh = body_mesh.filter_smooth_taubin(number_of_iterations=5)
     # body_mesh.compute_vertex_normals()
@@ -326,7 +320,7 @@ def main():
             state = robot_state_client.get_robot_state()
 
             # Preprocess the data for inference
-            processed_data, joint_angles_dict = preprocess_realtime_data(state, np.zeros(12), markers_path)
+            processed_data= preprocess_realtime_data(state, np.zeros(12), markers_path)
             print(f"Processed data shape: {processed_data.shape}")
             joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}
             joint_states = state.kinematic_state.joint_states
@@ -342,65 +336,78 @@ def main():
                 else:
                     print(f"Joint {joint_info['name']} not found in URDF.")
             link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
-            trimesh_fk = prepare_trimesh_fk(robot_obj, link_fk_transforms)
-            robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
-            total_mesh = o3d.geometry.TriangleMesh()
+            # trimesh_fk = prepare_trimesh_fk(robot_obj, link_fk_transforms) # takes the most time
+            idx = 0
+            for link in robot_obj.links:
+                for visual in link.visuals:
+                    if visual.geometry.mesh:
+                        trimesh_fk[fk_meshes[idx]] = link_fk_transforms[link.name]
+                        idx += 1
+
+            for mesh, (o3d_mesh, initial_transform) in tm_to_o3d_map.items():
+                new_transform = np.linalg.inv(initial_transform) @ trimesh_fk[mesh]
+                o3d_mesh.transform(new_transform)
+            # robot_meshes, _ = convert_trimesh_to_open3d(trimesh_fk)
+            # o3d.visualization.draw_geometries(robot_meshes)
+            new_total_mesh = o3d.geometry.TriangleMesh()
             for mesh in robot_meshes:
-                total_mesh += mesh
-            vis.update_geometry(total_mesh)
-            point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
-            o3d.visualization.draw_geometries([point_cloud])
-            sys.exit()
-            # Perform inference
-            buffer = np.roll(buffer, 1, axis=0) # shift the buffer
-            # EMA moving average: exponential/linear/etc.
-            buffer[0] = model.predict(processed_data)
-            predictions = np.dot(weights, buffer).reshape(-1, 101)
-            predicted_class_index = np.argmax(predictions)
-            confidence = np.max(predictions)
-            predicted_class = classes[predicted_class_index]
-            # predicted_class, confidence = infer_realtime(model, processed_data, classes)
-            print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            # total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
-            point_cloud.colors = o3d.utility.Vector3dVector(original_point_colors)
-            # for geom in added_geometries:
-            #     vis.remove_geometry(geom)
-            # added_geometries = []
-            # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
-            if predicted_class == "no_contact" :
-            # or confidence < 0.1:
-                pos = [0, 0, 0]
-                print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-                # continue
-
-            # Visualize the prediction
-            # visualize_prediction(marker_positions, predicted_class, robot_meshes)
-            else:
-                pos = marker_positions.get(predicted_class)
-
-                indices = kdtree.query_ball_point(pos, radius)
-                # colors = np.asarray(total_mesh.vertex_colors)
-                colors = np.asarray(point_cloud.colors)
-                # colors[indices] = [1, 0, 0]
-                for idx in indices:
-                    if 0 <= idx < len(colors):  # Validate index range
-                        colors[idx] = [1, 0, 0]
-                # selected_points = point_cloud.select_by_index(indices)
-                # added_geometries.append(selected_points)
-                # vis.add_geometry(selected_points)
-                # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
-                point_cloud.colors = o3d.utility.Vector3dVector(colors)
-                # total_mesh.compute_vertex_normals()
-                # R = np.eye(3)
-                # T = np.eye(4)
-                # T[:3, :3] = R 
-                # T[:3, 3] = pos
-            # marker.translate(pos - marker.get_center(), relative=False)
-            # marker.translate(pos, relative=False)
+                new_total_mesh += mesh
             # vis.update_geometry(total_mesh)
+            new_points = np.asarray(new_total_mesh.sample_points_uniformly(number_of_points=1000000).points)
+            point_cloud.points = o3d.utility.Vector3dVector(new_points)
+            point_cloud.estimate_normals()
+            # # point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
+            # # o3d.visualization.draw_geometries([point_cloud])
+            # # Perform inference
+            # buffer = np.roll(buffer, 1, axis=0) # shift the buffer
+            # # EMA moving average: exponential/linear/etc.
+            # buffer[0] = model.predict(processed_data)
+            # predictions = np.dot(weights, buffer).reshape(-1, 101)
+            # predicted_class_index = np.argmax(predictions)
+            # confidence = np.max(predictions)
+            # predicted_class = classes[predicted_class_index]
+            # # predicted_class, confidence = infer_realtime(model, processed_data, classes)
+            # print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
+            # # total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
+            # point_cloud.colors = o3d.utility.Vector3dVector(original_point_colors)
+            # # for geom in added_geometries:
+            # #     vis.remove_geometry(geom)
+            # # added_geometries = []
+            # # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
+            # if predicted_class == "no_contact" :
+            # # or confidence < 0.1:
+            #     pos = [0, 0, 0]
+            #     print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
+            #     # continue
+
+            # # Visualize the prediction
+            # # visualize_prediction(marker_positions, predicted_class, robot_meshes)
+            # else:
+            #     pos = marker_positions.get(predicted_class)
+
+            #     indices = kdtree.query_ball_point(pos, radius)
+            #     # colors = np.asarray(total_mesh.vertex_colors)
+            #     colors = np.asarray(point_cloud.colors)
+            #     # colors[indices] = [1, 0, 0]
+            #     for idx in indices:
+            #         if 0 <= idx < len(colors):  # Validate index range
+            #             colors[idx] = [1, 0, 0]
+            #     # selected_points = point_cloud.select_by_index(indices)
+            #     # added_geometries.append(selected_points)
+            #     # vis.add_geometry(selected_points)
+            #     # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+            #     point_cloud.colors = o3d.utility.Vector3dVector(colors)
+            #     # total_mesh.compute_vertex_normals()
+            #     # R = np.eye(3)
+            #     # T = np.eye(4)
+            #     # T[:3, :3] = R 
+            #     # T[:3, 3] = pos
+            # # marker.translate(pos - marker.get_center(), relative=False)
+            # # marker.translate(pos, relative=False)
+            # # vis.update_geometry(total_mesh)
             vis.update_geometry(point_cloud)
             # for mesh in robot_meshes:
-            #     vis.update_geometry(mesh)
+                # vis.update_geometry(mesh)
             # vis.update_geometry(marker)
 
             vis.poll_events()

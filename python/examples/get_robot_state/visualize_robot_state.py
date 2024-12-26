@@ -406,6 +406,7 @@ def load_spot_with_red_dots():
 
 def convert_trimesh_to_open3d(trimesh_fk):
         o3d_meshes = []
+        tm_to_o3d_map = {}
         for tm in trimesh_fk:
             o3d_mesh = o3d.geometry.TriangleMesh(
                 vertices=o3d.utility.Vector3dVector(tm.vertices.copy()),
@@ -421,7 +422,45 @@ def convert_trimesh_to_open3d(trimesh_fk):
             # self.prev_fks.append(trimesh_fk[tm]) # world -> T1
 
             o3d_meshes.append(o3d_mesh)
-        return o3d_meshes
+            tm_to_o3d_map[tm] = (o3d_mesh, np.array(trimesh_fk[tm]))
+        return o3d_meshes, tm_to_o3d_map
+
+def update_open3d(trimesh_fk, o3d_meshes):
+        o3d_meshes = []
+        tm_to_o3d_map = {}
+        for tm in trimesh_fk:
+            o3d_mesh = o3d.geometry.TriangleMesh(
+                vertices=o3d.utility.Vector3dVector(tm.vertices.copy()),
+                triangles=o3d.utility.Vector3iVector(tm.faces.copy())
+            )
+            o3d_mesh.compute_vertex_normals()
+            try:
+                o3d_mesh.paint_uniform_color(tm.visual.material.main_color[:3] / 255.)
+            except AttributeError:
+                o3d_mesh.vertex_colors = o3d.utility.Vector3dVector(tm.visual.vertex_colors[:, :3] / 255.)
+
+            o3d_mesh.transform(trimesh_fk[tm])
+            # self.prev_fks.append(trimesh_fk[tm]) # world -> T1
+
+            o3d_meshes.append(o3d_mesh)
+            tm_to_o3d_map[tm] = o3d_mesh
+        return o3d_meshes, tm_to_o3d_map
+
+
+# def update_meshes_with_fk(o3d_meshes, trimesh_fk):
+#     for i, (mesh, new_geom) in enumerate(zip(o3d_meshes, trimesh_fk)):
+#         if new_geom and new_geom.vertices is not None:
+#             vertices = np.asarray(new_geom.vertices)
+#             mesh.vertices = o3d.utility.Vector3dVector(vertices)
+#             mesh.compute_vertex_normals()
+
+def update_meshes_with_fk(base_meshes, transforms):
+    points = []
+    for mesh, transform in zip(base_meshes, transforms):
+        mesh_points = np.asarray(mesh.vertices)
+        transformed_points = (transform @ np.hstack([mesh_points, np.ones((len(mesh_points), 1))]).T).T[:, :3]
+        points.extend(transformed_points)
+    return np.array(points)
 
 def load_robot_from_urdf(urdf_path):
     """Load robot meshes from a URDF file and convert to Open3D objects."""
@@ -558,7 +597,7 @@ def prepare_trimesh_fk(robot, link_fk_transforms):
     """
     trimesh_fk = {}
     folder_path = Path(__file__).parent
-
+    meshes = []
     for link in robot.links:
         for visual in link.visuals:
             if visual.geometry.mesh:
@@ -575,8 +614,9 @@ def prepare_trimesh_fk(robot, link_fk_transforms):
                 # Assign the FK transform
                 transform = link_fk_transforms[link.name]
                 trimesh_fk[mesh] = transform
+                meshes.append(mesh)
 
-    return trimesh_fk
+    return trimesh_fk, meshes
 
 def visualize_robot_with_markers(robot_meshes, marker_positions):
     """
