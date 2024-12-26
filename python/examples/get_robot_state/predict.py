@@ -47,6 +47,7 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
     state_dict = data.kinematic_state.joint_states
         # torque_dict[i] = []
     torque_dict = []
+    joint_angles_dict = []
         # for joint in state_dict[i]:
     for joint in state_dict:
         joint_name = getattr(joint, 'name', None)
@@ -56,6 +57,10 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
                     'name': joint_name,
                     'position': joint.position.value,
                     'load': joint.load.value  # Assuming load has a 'value' attribute
+                })
+                joint_angles_dict.append({
+                    'name': joint_name,
+                    'angle': joint.position.value
                 })
     # num_entries = len(torque_dict)
     # num_joints = max(len(torque_dict[i]) for i in torque_dict)
@@ -89,7 +94,7 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
     # data = [torque_pos[:min_length] for torque_pos in data]
     data_processed = np.array(data)
 
-    return data_processed
+    return data_processed, joint_angles_dict
 
 
 # def infer_realtime(model, data, classes):
@@ -203,6 +208,29 @@ def main():
     #     [0.1, 0.05, 0.09],
     #     [-0.12, -0.01, 0.09],
     # ]
+    simplified_to_full_name = {
+        'fl.hx': 'front_left_hip_x',
+        'fr.hx': 'front_right_hip_x',
+        'hl.hx': 'rear_left_hip_x',
+        'hr.hx': 'rear_right_hip_x',
+        'fl.hy': 'front_left_hip_y',
+        'fr.hy': 'front_right_hip_y',
+        'hl.hy': 'rear_left_hip_y',
+        'hr.hy': 'rear_right_hip_y',
+        'fl.kn': 'front_left_knee',
+        'fr.kn': 'front_right_knee',
+        'hl.kn': 'rear_left_knee',
+        'hr.kn': 'rear_right_knee',
+        'arm0.sh0': 'arm_sh0',
+        'arm0.sh1': 'arm_sh1',
+        'arm0.el0': 'arm_el0',
+        'arm0.el1': 'arm_el1',
+        'arm0.wr0': 'arm_wr0',
+        'arm0.wr1': 'arm_wr1',
+        'arm0.f1x': 'arm_f1x',
+        'arm0.hr0': 'arm_hr0',
+    }
+    
     # markers_pos, pos_indices = find_closest_vertices(robot_meshes[0], markers_pos)
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"Loaded marker positions: {len(marker_positions)}")
@@ -298,9 +326,31 @@ def main():
             state = robot_state_client.get_robot_state()
 
             # Preprocess the data for inference
-            processed_data = preprocess_realtime_data(state, np.zeros(12), markers_path)
+            processed_data, joint_angles_dict = preprocess_realtime_data(state, np.zeros(12), markers_path)
             print(f"Processed data shape: {processed_data.shape}")
+            joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}
+            joint_states = state.kinematic_state.joint_states
+            for joint_info in joint_states:
+                
+                joint = robot_obj.joint_map[simplified_to_full_name.get(joint_info.name)]
 
+                if joint:
+                    # joint.position = joint.position
+                    joint_positions[simplified_to_full_name.get(joint_info.name)] = joint_info.position.value
+                    # else:
+                        # print(f"Joint {joint_name} is not a revolute joint.")
+                else:
+                    print(f"Joint {joint_info['name']} not found in URDF.")
+            link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
+            trimesh_fk = prepare_trimesh_fk(robot_obj, link_fk_transforms)
+            robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+            total_mesh = o3d.geometry.TriangleMesh()
+            for mesh in robot_meshes:
+                total_mesh += mesh
+            vis.update_geometry(total_mesh)
+            point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
+            o3d.visualization.draw_geometries([point_cloud])
+            sys.exit()
             # Perform inference
             buffer = np.roll(buffer, 1, axis=0) # shift the buffer
             # EMA moving average: exponential/linear/etc.
@@ -347,13 +397,15 @@ def main():
                 # T[:3, 3] = pos
             # marker.translate(pos - marker.get_center(), relative=False)
             # marker.translate(pos, relative=False)
+            # vis.update_geometry(total_mesh)
             vis.update_geometry(point_cloud)
-            # vis.update_geometry(marker)
+            # for mesh in robot_meshes:
+            #     vis.update_geometry(mesh)
             # vis.update_geometry(marker)
 
             vis.poll_events()
             vis.update_renderer()
-
+            # sys.exit()
             # Add user prompt to continue or exit
             # user_input = input("Press 'Enter' to collect data again or 'q' to quit: ").strip().lower()
             # if user_input == 'q':

@@ -30,6 +30,8 @@ def load_joint_torques(torque_path):
     torque_dict = {}
     for i in range(len(state)):
         state_dict[i] = state[i].kinematic_state.joint_states
+        print(f"state_dict: {state_dict[i][0]}")
+        sys.exit()
         torque_dict[i] = []
         for joint in state_dict[i]:
             joint_name = getattr(joint, 'name', None)
@@ -644,6 +646,8 @@ def update_joints(joint_pos_path):
 
 
 if __name__ == "__main__":
+    load_joint_torques("data/gouger1209/stand_h2/67.npy")
+    sys.exit()
     update_joints("data/gouger1209/stand_h2/67.npy")
     sys.exit()
     # vis_joint_torques(torque_path2)
