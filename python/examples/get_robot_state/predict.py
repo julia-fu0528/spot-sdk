@@ -236,12 +236,16 @@ def main():
                 else:
                     print(f"Joint {joint_info['name']} not found in URDF.")
             visualizer.visualize(cfg=joint_positions)
+            for mesh in visualizer.o3d_meshes_default:
+                vis.update_geometry(mesh)
+            vis.poll_events()
+            vis.update_renderer()
             # o3d.visualization.draw_geometries(robot_meshes)
             # new_total_mesh = o3d.geometry.TriangleMesh()
-            # for mesh in robot_meshes:
+            # for mesh in visualizer.o3d_meshes_default:
             #     new_total_mesh += mesh
             # vis.update_geometry(total_mesh)
-            # new_points = np.asarray(new_total_mesh.sample_points_uniformly(number_of_points=1000000).points)
+            # new_points = np.asarray(total_mesh.sample_points_uniformly(number_of_points=1000000).points)
             # point_cloud.points = o3d.utility.Vector3dVector(new_points)
             # point_cloud.estimate_normals()
             # point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
@@ -281,8 +285,6 @@ def main():
             # marker.translate(pos - marker.get_center(), relative=False)
             # marker.translate(pos, relative=False)
             # vis.update_geometry(point_cloud)
-            for mesh in visualizer.o3d_meshes_default:
-                vis.update_geometry(mesh)
 
             vis.poll_events()
             vis.update_renderer()

@@ -6,7 +6,10 @@ from collections import OrderedDict
 
 class SpotVisualizer():
     def __init__(self, vis=None):
+        self.vis = vis
         self.prev_fks = []
+        self.point_clouds = []
+        self.points_per_mesh = 100000
         self.robot = URDF.load("spot_description/spot.urdf")
         
         # link -> body
@@ -19,10 +22,10 @@ class SpotVisualizer():
 
         self.o3d_meshes_default = self.convert_trimesh_to_open3d(self.fk_default)
 
-        self.vis = vis
+        # self.vis = vis
         if self.vis:
-            for geometry in self.o3d_meshes_default:
-                self.vis.add_geometry(geometry)
+            # for geometry in self.o3d_meshes_default:
+                # self.vis.add_geometry(geometry)
 
             # add ground plane
             ground_plane = o3d.geometry.TriangleMesh.create_box(width=5.0, height=5.0, depth=0.1)
@@ -33,6 +36,7 @@ class SpotVisualizer():
 
     def convert_trimesh_to_open3d(self, trimesh_fk):
         o3d_meshes = []
+        self.point_clouds = []
         for tm in trimesh_fk:
             o3d_mesh = o3d.geometry.TriangleMesh(
                 vertices=o3d.utility.Vector3dVector(tm.vertices.copy()),
@@ -46,7 +50,9 @@ class SpotVisualizer():
 
             o3d_mesh.transform(trimesh_fk[tm])
             self.prev_fks.append(trimesh_fk[tm]) # world -> T1
-
+            pcd = o3d_mesh.sample_points_uniformly(number_of_points=self.points_per_mesh)
+            self.vis.add_geometry(pcd)
+            self.point_clouds.append(pcd)
             o3d_meshes.append(o3d_mesh)
         return o3d_meshes
     
@@ -58,6 +64,10 @@ class SpotVisualizer():
             self.o3d_meshes_default[idx].transform(np.linalg.inv(self.prev_fks[idx]))
             self.o3d_meshes_default[idx].transform(current_transform)
 
+            self.point_clouds[idx].transform(np.linalg.inv(self.prev_fks[idx]))
+            self.point_clouds[idx].transform(current_transform)
+
+            self.vis.update_geometry(self.point_clouds[idx])
             self.prev_fks[idx] = current_transform
 
     def visualize(self, cfg=None, odom=None):
