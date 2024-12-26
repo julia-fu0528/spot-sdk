@@ -603,7 +603,8 @@ def visualize_robot_with_markers(robot_meshes, marker_positions):
 
 if __name__ == "__main__":
     # vis_joint_torques(torque_path2)
-
+    vis_joint_torques(["data/gouger1209/stand_h2/67.npy"])
+    sys.exit()
     # all directories in data/gouger1209
     all_dir = natsorted(os.listdir("data/gouger1209"))
     all_dir = [os.path.join("data/gouger1209", dir) for dir in all_dir]

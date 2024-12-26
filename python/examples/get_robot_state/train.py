@@ -76,12 +76,14 @@ def preprocess(torque_dir, classes):
     # count the number of directories in torque_dir
     num_dir = len([name for name in os.listdir(torque_dir) if os.path.isdir(os.path.join(torque_dir, name))])
     print(f"num_dir: {num_dir}")
-    num_dir = 9
+    num_dir = 19
     # randomly pick a number from 0 to num_dir
     # val_idx = random.randint(0, num_dir)
     val_indices = random.sample(range(num_dir), 2)
     train_dirs = []
-    for idx, dir in enumerate(natsorted(os.listdir(torque_dir))[:10]):
+    dirs = natsorted(os.listdir(torque_dir))
+    dirs = dirs[:10] + dirs[-10:]
+    for idx, dir in enumerate(dirs):
         if os.path.isdir(os.path.join(torque_dir, dir)):
             # if idx == val_idx:
             if idx in val_indices:
@@ -147,7 +149,7 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
 
     # Compile the model
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=5e-4),# 5e-4
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),# 5e-4
         # optimizer='adam',
         loss='categorical_crossentropy',  # Cross-entropy loss for classification
         metrics=['accuracy']

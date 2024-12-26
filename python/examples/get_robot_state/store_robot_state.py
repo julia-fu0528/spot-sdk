@@ -149,8 +149,8 @@ def main():
     collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
     # os.makedirs("data/test1203", exist_ok=True)
     for idx, pos in marker_positions.items():
-        # if int(idx)<10:
-        #     continue
+        # if int(idx)<57:
+            # continue
         # Create marker for current position
         marker = create_red_markers([pos], radius=0.02)[0]
         

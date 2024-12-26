@@ -236,7 +236,7 @@ def main():
 
     # o3d.visualization.draw_geometries([point_cloud])
     # sys.exit()
-    vis.add_geometry(total_mesh)
+    # vis.add_geometry(total_mesh)
     vis.add_geometry(point_cloud)
     # o3d.visualization.draw_geometries([total_mesh])
     # sys.exit()
