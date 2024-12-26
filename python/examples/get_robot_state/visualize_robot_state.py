@@ -73,7 +73,7 @@ def load_joint_positions(joint_path):
                     # Store both the joint name and load value in the dictionary
                     joint_pos_dict[i].append({
                         'name': joint_name,
-                        'load': joint.position.value  # Assuming load has a 'value' attribute
+                        'angle': joint.position.value  # Assuming load has a 'value' attribute
                     })
 
     # Determine the number of entries and the maximum number of joints to dynamically handle varying joint counts
@@ -87,7 +87,7 @@ def load_joint_positions(joint_path):
     # Fill torque_data with torque values, ignoring missing joints for each entry
     for i in range(num_entries):
         for j, joint in enumerate(joint_pos_dict[i]):
-            joint_pos_data[i, j] = joint['load']
+            joint_pos_data[i, j] = joint['angle']
             if i == 0:
                 joint_names.append(joint['name'])
     # print(f"torque dict:{torque_dict}")
@@ -599,12 +599,55 @@ def visualize_robot_with_markers(robot_meshes, marker_positions):
         # Visualize with specific camera view
         visualize_with_camera(geometries, camera_params)
 
+def update_joints(joint_pos_path):
+    robot = URDF.load('spot_description/spot.urdf')
+
+    joint_angles, num_entries, num_joints, joint_names = load_joint_positions(joint_pos_path)
+    print(f"joint_angles: {joint_angles.shape}")
+
+    simplified_to_full_name = {
+        'fl.hx': 'front_left_hip_x',
+        'fr.hx': 'front_right_hip_x',
+        'hl.hx': 'rear_left_hip_x',
+        'hr.hx': 'rear_right_hip_x',
+        'fl.hy': 'front_left_hip_y',
+        'fr.hy': 'front_right_hip_y',
+        'hl.hy': 'rear_left_hip_y',
+        'hr.hy': 'rear_right_hip_y',
+        'fl.kn': 'front_left_knee',
+        'fr.kn': 'front_right_knee',
+        'hl.kn': 'rear_left_knee',
+        'hr.kn': 'rear_right_knee',
+    }
+    joint_positions = {joint.name: 0.0 for joint in robot.joints}
+
+    for i, joint_name in enumerate(joint_names):
+        print(f"joint_name: {robot.joint_map.keys()}")
+        print(f"joint_name: {joint_name}")
+        joint = robot.joint_map[simplified_to_full_name.get(joint_name)]
+
+        if joint:
+            # if joint.type == 'revolute':
+            joint.position = joint_angles[0, i]
+            joint_positions[joint.name] = joint_angles[0, i]
+            # else:
+                # print(f"Joint {joint_name} is not a revolute joint.")
+        else:
+            print(f"Joint {joint_name} not found in URDF.")
+
+    link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
+    trimesh_fk = prepare_trimesh_fk(robot, link_fk_transforms)
+    robot_meshes = convert_trimesh_to_open3d(trimesh_fk)
+    o3d.visualization.draw_geometries(robot_meshes)
+    
+
 
 
 if __name__ == "__main__":
+    update_joints("data/gouger1209/stand_h2/67.npy")
+    sys.exit()
     # vis_joint_torques(torque_path2)
     vis_joint_torques(["data/gouger1209/stand_h2/67.npy"])
-    sys.exit()
     # all directories in data/gouger1209
     all_dir = natsorted(os.listdir("data/gouger1209"))
     all_dir = [os.path.join("data/gouger1209", dir) for dir in all_dir]
