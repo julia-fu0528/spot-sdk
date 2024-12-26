@@ -11,6 +11,7 @@ from urdfpy import URDF
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.models import load_model
+from src.utils.visualizer import SpotVisualizer
 from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 from visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
@@ -22,13 +23,10 @@ def collect_realtime_data(robot_state_client, duration=2):
     start_time = time.time()
     data = []
 
-    # print("Starting real-time data collection...")
     while time.time() - start_time < duration:
         state = robot_state_client.get_robot_state()
         data.append(state)
-        # time.sleep(0.1)  # Sampling rate (adjust as needed)
 
-    # print("Real-time data collection complete.")
     return np.array(data)
 
 def preprocess_realtime_data(data, offset, markers_path, normalize=True):
@@ -36,18 +34,8 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
     Preprocess the real-time data for inference.
     """
     markers_pos = np.loadtxt(markers_path, delimiter=",")
-    # print(f"Loaded marker positions: {len(markers_pos)}")
-    
-    # Assuming data contains joint torque or similar state information
-    # Preprocess data (dummy example here, adapt as needed)
-    # state_dict = {}
-    # torque_dict = {}
-    # for i in range(len(data)):
-        # state_dict[i] = data[i].kinematic_state.joint_states
     state_dict = data.kinematic_state.joint_states
-        # torque_dict[i] = []
     torque_dict = []
-        # for joint in state_dict[i]:
     for joint in state_dict:
         joint_name = getattr(joint, 'name', None)
         if joint_name is not None:
@@ -55,71 +43,35 @@ def preprocess_realtime_data(data, offset, markers_path, normalize=True):
                 torque_dict.append({
                     'name': joint_name,
                     'position': joint.position.value,
-                    'load': joint.load.value  # Assuming load has a 'value' attribute
+                    'load': joint.load.value  
                 })
-    # num_entries = len(torque_dict)
-    # num_joints = max(len(torque_dict[i]) for i in torque_dict)
     num_joints = len(torque_dict)
-    # torque_data = np.full((num_entries, num_joints), np.nan, dtype=float)
     torque_data = np.full((1, num_joints), np.nan, dtype=float)
-    # pos_data = np.full((num_entries, num_joints), np.nan, dtype=float)
     pos_data = np.full((1, num_joints), np.nan, dtype=float)
     joint_names = []
-    # for i in range(num_entries):
-    # for j, joint in enumerate(torque_dict[i]):
     for j, joint in enumerate(torque_dict):
-            # torque_data[i, j]  = joint['load']
             torque_data[0, j]  = joint['load']
-            # pos_data[i, j] = joint['position']
             pos_data[0, j] = joint['position']
-            # if i == 0:
             joint_names.append(joint['name'])
-    # data_processed = np.array([d.joint_state.load_torque for d in data])
-    # data_processed = np.expand_dims(data_processed, axis=0)  # Add batch dimension
-    # normalize
-    # torque_data = torque_data - offset
-    # data = np.hstack((torque_dict['load'], torque_dict['position']))
     data = np.hstack((torque_data, pos_data))
-    # print(f"Data shape: {data.shape}")
     if normalize:
-        # print(f"Normalizing torque data...\n")
         data = 2 * ((data - data.min()) / (data.max() - data.min())) - 1
-    # torque_data.append(normalized_torque)
-    # min_length = min([len(torque_pos) for torque_pos in data])
-    # data = [torque_pos[:min_length] for torque_pos in data]
     data_processed = np.array(data)
 
     return data_processed
 
-# def infer_realtime(model, data, classes):
-#     """
-#     Perform real-time inference using the trained model.
-#     """
-#     predictions = model.predict(data)
-#     predicted_class = classes[np.argmax(np.mean(predictions, axis=0))]
-#     confidence = np.max(predictions)
-
-#     return predicted_class, confidence
 def infer_realtime(model, data, classes):
     """
     Perform real-time inference using the trained model.
     """
-    # print("Running real-time inference...")
-    
-    # Get predictions (shape: [num_samples, num_classes])
     predictions = model.predict(data)
 
     if predictions.shape[0] == 2:  # Multiple samples
-        # mean_probabilities = np.mean(predictions, axis=0)
-        # predicted_class_index = np.argmax(mean_probabilities)
-        # confidence = np.max(mean_probabilities)
         predicted_classes = [np.argmax(pred) for pred in predictions]
-        # print(f"Predicted classes: {predicted_classes}")
         
         # Find the most common class
         most_common_class_index, count = Counter(predicted_classes).most_common(1)[0]
         predicted_class = classes[most_common_class_index]
-        # print(f"predicted class: {predicted_class}")
         
         # Confidence can be calculated as the proportion of predictions for the most common class
         confidence = count / len(predicted_classes)
@@ -160,7 +112,6 @@ def main():
     parser.add_argument('--model_path', required=True, help='Path to the trained model')
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--data_dir', required=True, help='Path to the directory containing torque data')
-    # parser.add_argument('--classes', nargs='+', required=True, help='List of class names')
     options = parser.parse_args()
 
      # Load the trained model
@@ -169,11 +120,12 @@ def main():
     print("Model loaded successfully.")
 
      # Load robot meshes for visualization
-    robot_obj = URDF.load('spot_description/spot.urdf')
-    joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}  # Zero configuration
-    link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
-    trimesh_fk, fk_meshes = prepare_trimesh_fk(robot_obj, link_fk_transforms)
-    robot_meshes, tm_to_o3d_map = convert_trimesh_to_open3d(trimesh_fk)
+    # robot_obj = URDF.load('spot_description/spot.urdf')
+    # joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}  # Zero configuration
+    # link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
+    # trimesh_fk, fk_meshes = prepare_trimesh_fk(robot_obj, link_fk_transforms)
+    # robot_meshes, tm_to_o3d_map = convert_trimesh_to_open3d(trimesh_fk)
+    visualizer = SpotVisualizer()
 
 
     # Initialize robot and client
@@ -238,11 +190,6 @@ def main():
     # get all the file names
     classes = [f.split('.')[0] for f in torque_files]
 
-    # no_contact_torque, _, _, _ = load_joint_torques(os.path.join(torque_dir, "no_contact.npy"))
-    # print(f"Collecting no-contact torque data for offset calculation...")
-    # no_contact_torque = collect_realtime_data(robot_state_client, 10)
-    # no_contact_torque = preprocess_realtime_data(no_contact_torque, np.zeros(12), markers_path, False)
-    # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offset
     vis = o3d.visualization.Visualizer() 
     vis.create_window()
     radius = 0.04
@@ -251,7 +198,7 @@ def main():
     #     vis.add_geometry(robot_mesh)
     total_mesh = o3d.geometry.TriangleMesh()
 
-    for mesh in robot_meshes:
+    for mesh in visualizer.o3d_meshes_default:
        total_mesh += mesh
     point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
     # sampled_points = sample_points_from_mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles), num_points)
@@ -263,25 +210,12 @@ def main():
     # o3d.visualization.draw_geometries([total_mesh])
     # sys.exit()
     # vis.add_geometry(marker)
-    # for i in range(icp_iteration):
-    # while True:
-        # do ICP single iteration
-        # transform geometry using ICP
-        # vis.update_geometry(marker)
-        # vis.poll_events()
-        # vis.update_renderer()000
-    # freq = 60
-    # delta_T = 1/freq
-    # tao = 1
-    # alpha = 1 - np.exp(-delta_T/tao)
-    # print(f"alpha: {alpha}")
     alpha = 0.1
     sliding_win = 10
     # buffer = np.zeros((sliding_win, 24))
     buffer = np.zeros((sliding_win, 101))
     weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
-    # weights = weights / np.sum(weights) normalize??
     print(f"weights: {weights}")
 
     original_point_colors = np.asarray(point_cloud.colors).copy()
@@ -297,36 +231,21 @@ def main():
     # vertices = np.asarray(total_mesh.vertices)
     # sampled_points = sample_points_from_mesh(np.asarray(robot_meshes[0].vertices), np.asarray(robot_meshes[0].triangles), 10000)
     kdtree = cKDTree(pcd_points)
-    # pos = [0, 0, 0.075]
-    # indices = kdtree.query_ball_point(pos, radius)
-    # colors = np.asarray(point_cloud.colors)
-    # for idx in indices:
-    #     if 0 <= idx < len(colors):  # Validate index range
-    #         colors[idx] = [1, 0, 0]
-    # point_cloud.colors = o3d.utility.Vector3dVector(colors)
-    # added_geometries = []
-    # selected_points = point_cloud.select_by_index(indices)
-    # added_geometries.append(selected_points)
-    # vis.add_geometry(selected_points)
 
     
 
     try:
         while True:
-            # Collect real-time data
-            # print(f"YOU CAN TOUCH THE SPOT NOW. Data collection will start in 5 seconds, please make sure you are touching the Spot.\n")
-            # time.sleep(5)
-            # data = collect_realtime_data(robot_state_client, 5)
             state = robot_state_client.get_robot_state()
 
             # Preprocess the data for inference
             processed_data= preprocess_realtime_data(state, np.zeros(12), markers_path)
             print(f"Processed data shape: {processed_data.shape}")
-            joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}
+            joint_positions = {joint.name: 0.0 for joint in visualizer.robot.joints}
             joint_states = state.kinematic_state.joint_states
             for joint_info in joint_states:
                 
-                joint = robot_obj.joint_map[simplified_to_full_name.get(joint_info.name)]
+                joint = visualizer.robot.joint_map[simplified_to_full_name.get(joint_info.name)]
 
                 if joint:
                     # joint.position = joint.position
@@ -335,10 +254,10 @@ def main():
                         # print(f"Joint {joint_name} is not a revolute joint.")
                 else:
                     print(f"Joint {joint_info['name']} not found in URDF.")
-            link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
+            link_fk_transforms = compute_forward_kinematics(visualizer.robot, joint_positions)
             # trimesh_fk = prepare_trimesh_fk(robot_obj, link_fk_transforms) # takes the most time
             idx = 0
-            for link in robot_obj.links:
+            for link in visualizer.robot.links:
                 for visual in link.visuals:
                     if visual.geometry.mesh:
                         trimesh_fk[fk_meshes[idx]] = link_fk_transforms[link.name]
@@ -356,55 +275,53 @@ def main():
             new_points = np.asarray(new_total_mesh.sample_points_uniformly(number_of_points=1000000).points)
             point_cloud.points = o3d.utility.Vector3dVector(new_points)
             point_cloud.estimate_normals()
-            # # point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
-            # # o3d.visualization.draw_geometries([point_cloud])
-            # # Perform inference
-            # buffer = np.roll(buffer, 1, axis=0) # shift the buffer
-            # # EMA moving average: exponential/linear/etc.
-            # buffer[0] = model.predict(processed_data)
-            # predictions = np.dot(weights, buffer).reshape(-1, 101)
-            # predicted_class_index = np.argmax(predictions)
-            # confidence = np.max(predictions)
-            # predicted_class = classes[predicted_class_index]
-            # # predicted_class, confidence = infer_realtime(model, processed_data, classes)
-            # print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            # # total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
-            # point_cloud.colors = o3d.utility.Vector3dVector(original_point_colors)
-            # # for geom in added_geometries:
-            # #     vis.remove_geometry(geom)
-            # # added_geometries = []
-            # # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
-            # if predicted_class == "no_contact" :
-            # # or confidence < 0.1:
-            #     pos = [0, 0, 0]
-            #     print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            #     # continue
+            # point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
+            # o3d.visualization.draw_geometries([point_cloud])
+            # Perform inference
+            buffer = np.roll(buffer, 1, axis=0) 
+            buffer[0] = model.predict(processed_data)
+            predictions = np.dot(weights, buffer).reshape(-1, 101)
+            predicted_class_index = np.argmax(predictions)
+            confidence = np.max(predictions)
+            predicted_class = classes[predicted_class_index]
+            print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
+            # total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
+            point_cloud.colors = o3d.utility.Vector3dVector(original_point_colors)
+            # for geom in added_geometries:
+            #     vis.remove_geometry(geom)
+            # added_geometries = []
+            # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
+            if predicted_class == "no_contact" :
+            # or confidence < 0.1:
+                pos = [0, 0, 0]
+                print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
+                # continue
 
-            # # Visualize the prediction
-            # # visualize_prediction(marker_positions, predicted_class, robot_meshes)
-            # else:
-            #     pos = marker_positions.get(predicted_class)
+            # Visualize the prediction
+            # visualize_prediction(marker_positions, predicted_class, robot_meshes)
+            else:
+                pos = marker_positions.get(predicted_class)
 
-            #     indices = kdtree.query_ball_point(pos, radius)
-            #     # colors = np.asarray(total_mesh.vertex_colors)
-            #     colors = np.asarray(point_cloud.colors)
-            #     # colors[indices] = [1, 0, 0]
-            #     for idx in indices:
-            #         if 0 <= idx < len(colors):  # Validate index range
-            #             colors[idx] = [1, 0, 0]
-            #     # selected_points = point_cloud.select_by_index(indices)
-            #     # added_geometries.append(selected_points)
-            #     # vis.add_geometry(selected_points)
-            #     # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
-            #     point_cloud.colors = o3d.utility.Vector3dVector(colors)
-            #     # total_mesh.compute_vertex_normals()
-            #     # R = np.eye(3)
-            #     # T = np.eye(4)
-            #     # T[:3, :3] = R 
-            #     # T[:3, 3] = pos
-            # # marker.translate(pos - marker.get_center(), relative=False)
-            # # marker.translate(pos, relative=False)
-            # # vis.update_geometry(total_mesh)
+                indices = kdtree.query_ball_point(pos, radius)
+                # colors = np.asarray(total_mesh.vertex_colors)
+                colors = np.asarray(point_cloud.colors)
+                # colors[indices] = [1, 0, 0]
+                for idx in indices:
+                    if 0 <= idx < len(colors):  # Validate index range
+                        colors[idx] = [1, 0, 0]
+                # selected_points = point_cloud.select_by_index(indices)
+                # added_geometries.append(selected_points)
+                # vis.add_geometry(selected_points)
+                # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+                point_cloud.colors = o3d.utility.Vector3dVector(colors)
+                # total_mesh.compute_vertex_normals()
+                # R = np.eye(3)
+                # T = np.eye(4)
+                # T[:3, :3] = R 
+                # T[:3, 3] = pos
+            # marker.translate(pos - marker.get_center(), relative=False)
+            # marker.translate(pos, relative=False)
+            # vis.update_geometry(total_mesh)
             vis.update_geometry(point_cloud)
             # for mesh in robot_meshes:
                 # vis.update_geometry(mesh)
@@ -412,11 +329,6 @@ def main():
 
             vis.poll_events()
             vis.update_renderer()
-            # sys.exit()
-            # Add user prompt to continue or exit
-            # user_input = input("Press 'Enter' to collect data again or 'q' to quit: ").strip().lower()
-            # if user_input == 'q':
-            #     break
     except KeyboardInterrupt:
         print("Exiting real-time inference...")
     except Exception as e:
