@@ -119,15 +119,6 @@ def main():
     model = load_model(options.model_path)
     print("Model loaded successfully.")
 
-     # Load robot meshes for visualization
-    # robot_obj = URDF.load('spot_description/spot.urdf')
-    # joint_positions = {joint.name: 0.0 for joint in robot_obj.joints}  # Zero configuration
-    # link_fk_transforms = compute_forward_kinematics(robot_obj, joint_positions)
-    # trimesh_fk, fk_meshes = prepare_trimesh_fk(robot_obj, link_fk_transforms)
-    # robot_meshes, tm_to_o3d_map = convert_trimesh_to_open3d(trimesh_fk)
-    visualizer = SpotVisualizer()
-
-
     # Initialize robot and client
     sdk = create_standard_sdk('RobotStateClient')
     robot = sdk.create_robot(options.hostname)
@@ -190,8 +181,11 @@ def main():
     # get all the file names
     classes = [f.split('.')[0] for f in torque_files]
 
+   
     vis = o3d.visualization.Visualizer() 
     vis.create_window()
+    visualizer = SpotVisualizer(vis=vis)
+    # visualizer.visualize()
     radius = 0.04
     # marker = create_red_markers([[0, 0, 0.075]], radius=radius)[0]
     # for robot_mesh in robot_meshes:
@@ -204,19 +198,12 @@ def main():
     # sampled_points = sample_points_from_mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles), num_points)
 
     # o3d.visualization.draw_geometries([point_cloud])
-    # sys.exit()
-    # vis.add_geometry(total_mesh)
-    vis.add_geometry(point_cloud)
-    # o3d.visualization.draw_geometries([total_mesh])
-    # sys.exit()
-    # vis.add_geometry(marker)
+    # vis.add_geometry(point_cloud)
     alpha = 0.1
     sliding_win = 10
-    # buffer = np.zeros((sliding_win, 24))
     buffer = np.zeros((sliding_win, 101))
     weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
-    print(f"weights: {weights}")
 
     original_point_colors = np.asarray(point_cloud.colors).copy()
     # original_vertex_colors = np.asarray(total_mesh.vertex_colors).copy()
@@ -226,7 +213,6 @@ def main():
     # body_mesh = robot_meshes[0]
     # body_mesh = body_mesh.filter_smooth_taubin(number_of_iterations=5)
     # body_mesh.compute_vertex_normals()
-    # sys.exit()
     pcd_points = np.asarray(point_cloud.points)
     # vertices = np.asarray(total_mesh.vertices)
     # sampled_points = sample_points_from_mesh(np.asarray(robot_meshes[0].vertices), np.asarray(robot_meshes[0].triangles), 10000)
@@ -244,40 +230,21 @@ def main():
             joint_positions = {joint.name: 0.0 for joint in visualizer.robot.joints}
             joint_states = state.kinematic_state.joint_states
             for joint_info in joint_states:
-                
                 joint = visualizer.robot.joint_map[simplified_to_full_name.get(joint_info.name)]
-
                 if joint:
-                    # joint.position = joint.position
                     joint_positions[simplified_to_full_name.get(joint_info.name)] = joint_info.position.value
-                    # else:
-                        # print(f"Joint {joint_name} is not a revolute joint.")
                 else:
                     print(f"Joint {joint_info['name']} not found in URDF.")
-            link_fk_transforms = compute_forward_kinematics(visualizer.robot, joint_positions)
-            # trimesh_fk = prepare_trimesh_fk(robot_obj, link_fk_transforms) # takes the most time
-            idx = 0
-            for link in visualizer.robot.links:
-                for visual in link.visuals:
-                    if visual.geometry.mesh:
-                        trimesh_fk[fk_meshes[idx]] = link_fk_transforms[link.name]
-                        idx += 1
-
-            for mesh, (o3d_mesh, initial_transform) in tm_to_o3d_map.items():
-                new_transform = np.linalg.inv(initial_transform) @ trimesh_fk[mesh]
-                o3d_mesh.transform(new_transform)
-            # robot_meshes, _ = convert_trimesh_to_open3d(trimesh_fk)
+            visualizer.visualize(cfg=joint_positions)
             # o3d.visualization.draw_geometries(robot_meshes)
-            new_total_mesh = o3d.geometry.TriangleMesh()
-            for mesh in robot_meshes:
-                new_total_mesh += mesh
+            # new_total_mesh = o3d.geometry.TriangleMesh()
+            # for mesh in robot_meshes:
+            #     new_total_mesh += mesh
             # vis.update_geometry(total_mesh)
-            new_points = np.asarray(new_total_mesh.sample_points_uniformly(number_of_points=1000000).points)
-            point_cloud.points = o3d.utility.Vector3dVector(new_points)
-            point_cloud.estimate_normals()
+            # new_points = np.asarray(new_total_mesh.sample_points_uniformly(number_of_points=1000000).points)
+            # point_cloud.points = o3d.utility.Vector3dVector(new_points)
+            # point_cloud.estimate_normals()
             # point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
-            # o3d.visualization.draw_geometries([point_cloud])
-            # Perform inference
             buffer = np.roll(buffer, 1, axis=0) 
             buffer[0] = model.predict(processed_data)
             predictions = np.dot(weights, buffer).reshape(-1, 101)
@@ -287,15 +254,11 @@ def main():
             print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
             # total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
             point_cloud.colors = o3d.utility.Vector3dVector(original_point_colors)
-            # for geom in added_geometries:
-            #     vis.remove_geometry(geom)
-            # added_geometries = []
             # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
             if predicted_class == "no_contact" :
             # or confidence < 0.1:
                 pos = [0, 0, 0]
                 print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-                # continue
 
             # Visualize the prediction
             # visualize_prediction(marker_positions, predicted_class, robot_meshes)
@@ -305,13 +268,9 @@ def main():
                 indices = kdtree.query_ball_point(pos, radius)
                 # colors = np.asarray(total_mesh.vertex_colors)
                 colors = np.asarray(point_cloud.colors)
-                # colors[indices] = [1, 0, 0]
                 for idx in indices:
                     if 0 <= idx < len(colors):  # Validate index range
                         colors[idx] = [1, 0, 0]
-                # selected_points = point_cloud.select_by_index(indices)
-                # added_geometries.append(selected_points)
-                # vis.add_geometry(selected_points)
                 # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
                 point_cloud.colors = o3d.utility.Vector3dVector(colors)
                 # total_mesh.compute_vertex_normals()
@@ -321,11 +280,9 @@ def main():
                 # T[:3, 3] = pos
             # marker.translate(pos - marker.get_center(), relative=False)
             # marker.translate(pos, relative=False)
-            # vis.update_geometry(total_mesh)
-            vis.update_geometry(point_cloud)
-            # for mesh in robot_meshes:
-                # vis.update_geometry(mesh)
-            # vis.update_geometry(marker)
+            # vis.update_geometry(point_cloud)
+            for mesh in visualizer.o3d_meshes_default:
+                vis.update_geometry(mesh)
 
             vis.poll_events()
             vis.update_renderer()

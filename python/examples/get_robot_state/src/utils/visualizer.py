@@ -7,12 +7,14 @@ from collections import OrderedDict
 class SpotVisualizer():
     def __init__(self, vis=None):
         self.prev_fks = []
-        self.robot = URDF.load("../../spot_description/spot.urdf")
+        self.robot = URDF.load("spot_description/spot.urdf")
         
         # link -> body
         self.fk_default = self.robot.visual_trimesh_fk(cfg=None)
         # link -> world
+        self.fk_meshes = []
         for tm in self.fk_default:
+            self.fk_meshes.append(tm)
             self.fk_default[tm] = self.fk_default[tm]
 
         self.o3d_meshes_default = self.convert_trimesh_to_open3d(self.fk_default)
@@ -24,8 +26,8 @@ class SpotVisualizer():
 
             # add ground plane
             ground_plane = o3d.geometry.TriangleMesh.create_box(width=5.0, height=5.0, depth=0.1)
-            ground_plane.translate([-2.5, -2.5, -0.53-0.1])
-            self.vis.add_geometry(ground_plane)
+            ground_plane.translate([-2.5, -2.5, -0.53-0.26])
+            # self.vis.add_geometry(ground_plane)
             self.vis.poll_events()
             self.vis.update_renderer()
 
