@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.manifold import TSNE
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.layers import Dense, Flatten, Conv1D, GlobalAveragePooling1D
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.layers import Input
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -24,7 +24,7 @@ import seaborn as sns
 from visualize_robot_state import load_joint_torques, load_joint_positions, vis_joint_torques
 
 
-def load_data(torque_dir, class_to_index):
+def load_data(torque_dir, coordinates, seq = False):
     # torque_data = []
     training_data = []
     labels = []
@@ -38,7 +38,10 @@ def load_data(torque_dir, class_to_index):
         if torque_file.endswith(".npy"):
             torque_path = os.path.join(torque_dir, torque_file)
             class_name = torque_file.split(".")[0]  # Extract label from the filename
-            if class_name in classes:
+            if class_name == 'no_contact':
+                class_name = '100'
+            if class_name in coordinates.keys():
+                coordinate = coordinates[class_name]
                 torque, _, _, _ = load_joint_torques(torque_path)
                 if torque.shape[0]  < min_length:
                     min_length = torque.shape[0]
@@ -55,34 +58,96 @@ def load_data(torque_dir, class_to_index):
                 # print(f"training_data.shape: {training_data[-1].shape}")
                 # torque_data.append(torque) 
                 # labels.append(class_name * len(torque))
-                labels.append([class_to_index[class_name]] * len(torque))  # Map class name to index
+                # labels.append([class_to_index[class_name]] * len(torque))  # Map class name to index
+                labels.append(np.tile(coordinate, (len(torque), 1)))
             
     # get the min length of the torque data
     # min_length = min([len(torque) for torque in torque_data]),
     # torque_data = [torque[:min_length] for torque in torque_data]
     training_data = [data[:min_length] for data in training_data]
+    print(f"training data len: {training_data[0].shape}") # 101, 557, 24
     labels = [label[:min_length] for label in labels]
+    print(f"labels len: {labels[0].shape}") # 101, 557
     # torque_data = pad_sequences(torque_data, padding='post', dtype='float32')
     # torque_data = np.array(torque_data)
     training_data = np.array(training_data)
     labels = np.array(labels)
     # print(f"labels: {labels}")
     print(f"training_data.shape: {training_data.shape}")
-    # sys.exit()
+    print(f"labels shape: {labels.shape}")
     return training_data, labels
 
-def preprocess(torque_dir, classes):
-    class_to_index = {cls: idx for idx, cls in enumerate(classes)}
+
+def preprocess(torque_dir, coordinates):
+    # class_to_index = {cls: idx for idx, cls in enumerate(classes)}
     # count the number of directories in torque_dir
     num_dir = len([name for name in os.listdir(torque_dir) if os.path.isdir(os.path.join(torque_dir, name))])
     print(f"num_dir: {num_dir}")
-    num_dir = 19
+    num_dir = 20
     # randomly pick a number from 0 to num_dir
     # val_idx = random.randint(0, num_dir)
     val_indices = random.sample(range(num_dir), 2)
     train_dirs = []
     dirs = natsorted(os.listdir(torque_dir))
-    dirs = dirs[:10] + dirs[-10:]
+    dirs = dirs[:10] + dirs[-11:]
+    # dirs = dirs[:5]
+    for idx, dir in enumerate(dirs):
+        if os.path.isdir(os.path.join(torque_dir, dir)):
+            # if idx == val_idx:
+            if idx in val_indices:
+                val_dir = os.path.join(torque_dir, dir)
+            else:
+                train_dirs.append(os.path.join(torque_dir, dir))
+    for train_dir in train_dirs:
+        training_data, labels = load_data(train_dir, coordinates)
+        if 'X_train' in locals():
+            # min_len = min(X_train.shape[1], training_data.shape[1])
+            # print(f"min_len: {min_len}")
+            X_train = np.concatenate((X_train, training_data), axis=1)
+            y_train = np.concatenate((y_train, labels), axis=1)
+        else:
+            X_train = training_data
+            y_train = labels
+    X_val, y_val = load_data(val_dir, coordinates)
+    X_all, y_all = np.append(X_train, X_val, axis=1), np.append(y_train, y_val, axis=1)
+    print(f"X_all.shape: {X_all.shape}, y_all.shape: {y_all.shape}")
+    len_data = X_all.shape[1]
+    train_idx = random.sample(range(len_data), int(0.8 * len_data))
+    X_train, y_train = X_all[:, train_idx, :], y_all[:, train_idx]
+    val_idx = list(set(range(len_data)) - set(train_idx))
+    X_val, y_val = X_all[:, val_idx, :], y_all[:, val_idx]
+    # torque_data, labels = load_data(torque_dir, class_to_index)
+
+    # Split the second dimension (time steps)
+    # time_steps = torque_data.shape[1]
+    # split_index = int(0.8 * time_steps)
+
+    # train_idx = random.sample(range(time_steps), split_index)
+    # val_idx = list(set(range(time_steps)) - set(train_idx))
+    
+    # Split and reshape data
+    # X_train = torque_data[:, train_idx, :]
+    # X_val = torque_data[:, val_idx, :]
+    
+    # Reshape y data to match X
+    # y_train = labels_one_hot[:, train_idx, :].reshape(-1, labels_one_hot.shape[-1])
+    # y_val = labels_one_hot[:, val_idx, :].reshape(-1, labels_one_hot.shape[-1])
+    return X_train, X_val, y_train, y_val
+
+
+def preprocess_seq(torque_dir, classes):
+    class_to_index = {cls: idx for idx, cls in enumerate(classes)}
+    # count the number of directories in torque_dir
+    num_dir = len([name for name in os.listdir(torque_dir) if os.path.isdir(os.path.join(torque_dir, name))])
+    print(f"num_dir: {num_dir}")
+    num_dir = 20
+    # randomly pick a number from 0 to num_dir
+    # val_idx = random.randint(0, num_dir)
+    val_indices = random.sample(range(num_dir), 2)
+    train_dirs = []
+    dirs = natsorted(os.listdir(torque_dir))
+    dirs = dirs[:10] + dirs[-11:]
+    # dirs = dirs[:5]
     for idx, dir in enumerate(dirs):
         if os.path.isdir(os.path.join(torque_dir, dir)):
             # if idx == val_idx:
@@ -108,37 +173,53 @@ def preprocess(torque_dir, classes):
     X_train, y_train = X_all[:, train_idx, :], y_all[:, train_idx]
     val_idx = list(set(range(len_data)) - set(train_idx))
     X_val, y_val = X_all[:, val_idx, :], y_all[:, val_idx]
-    # sys.exit()
-    # torque_data, labels = load_data(torque_dir, class_to_index)
 
-    # Split the second dimension (time steps)
-    # time_steps = torque_data.shape[1]
-    # split_index = int(0.8 * time_steps)
 
-    # train_idx = random.sample(range(time_steps), split_index)
-    # val_idx = list(set(range(time_steps)) - set(train_idx))
+    sequence_length = 3
+    X_train_seq = []
+    y_train_seq = []
+    for i in range(len(X_train[0]) - sequence_length + 1):
+       X_train_seq.append(X_train[:, i:i+sequence_length, :])
+       y_train_seq.append(y_train[:, i+sequence_length-1])
     
-    # Split and reshape data
-    # X_train = torque_data[:, train_idx, :]
-    # X_val = torque_data[:, val_idx, :]
-    
-    # Reshape y data to match X
-    # y_train = labels_one_hot[:, train_idx, :].reshape(-1, labels_one_hot.shape[-1])
-    # y_val = labels_one_hot[:, val_idx, :].reshape(-1, labels_one_hot.shape[-1])
+    X_train = np.array(X_train_seq)
+    y_train = np.array(y_train_seq)
+
+    X_val_seq = []
+    y_val_seq = []
+    for i in range(len(X_val[0]) - sequence_length + 1):
+       X_val_seq.append(X_val[:, i:i+sequence_length, :])
+       y_val_seq.append(y_val[:, i+sequence_length-1])
+    X_val = np.array(X_val_seq)
+    y_val = np.array(y_val_seq)
+
     return X_train, X_val, y_train, y_val
-
 
 def create_model(input_shape, num_classes):
     model = Sequential([
         Input(shape=input_shape),      # Define input shape explicitly
         Flatten(),                     # Flatten the input
-        Dense(64, activation='relu'), # Hidden layer with 128 neurons
-        Dense(128, activation='relu'),  # Hidden layer with 64 neurons
+        Dense(128, activation='relu'), # Hidden layer with 128 neurons
+        Dense(256, activation='relu'),  # Hidden layer with 64 neurons
+        Dense(512, activation='relu'),
         Dense(256, activation='relu'),
-        Dense(num_classes, activation='softmax')  # Output layer
+        # Dense(num_classes, activation='softmax')  # classification
+        Dense(3)  # regression
     ])
     return model
     
+
+def create_model_conv(input_shape, num_classes):
+   model = Sequential([
+       Input(shape=(3, input_shape)),  # 3 timesteps, each with input_shape features
+       Conv1D(64, kernel_size=2, activation='relu'),
+       Conv1D(128, kernel_size=2, activation='relu'),
+       GlobalAveragePooling1D(),
+       Dense(256, activation='relu'),
+       Dense(num_classes, activation='softmax')
+   ])
+   return model
+
 
 def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
     # Create the model
@@ -147,12 +228,20 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
     model = create_model(input_shape, num_classes)
     model.summary()
 
-    # Compile the model
+    # Compile the model classification
+    # model.compile(
+    #     # optimizer=tf.keras.optimizers.Adam(learning_rate=5e-3),# 5e-4
+    #     optimizer='adam',
+    #     loss='categorical_crossentropy',  # Cross-entropy loss for classification
+    #     metrics=['accuracy']
+    # )
+
+    # regression
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),# 5e-4
-        # optimizer='adam',
-        loss='categorical_crossentropy',  # Cross-entropy loss for classification
-        metrics=['accuracy']
+        # optimizer=tf.keras.optimizers.Adam(learning_rate=5e-3),# 5e-4
+        optimizer='adam',
+        loss='mse',  # Cross-entropy loss for classification
+        metrics=[regression_accuracy, 'mae', euclidean_distance]
     )
     
 
@@ -172,8 +261,8 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
     history = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
-        epochs=70,                     # Number of epochs
-        batch_size=32,                 # Batch size
+        epochs=40,                     # Number of epochs
+        batch_size=128,                 # Batch size
         callbacks=[
             tensorboard_callback,
             tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True),
@@ -184,10 +273,25 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
             )
         ]
     )
+    print(history.history['euclidean_distance'])
+    print(history.history['val_euclidean_distance'])
     # Save the trained model
     model.save(model_path)
 
     return model, history
+
+
+def euclidean_distance(y_true, y_pred):
+    return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1)))
+
+
+def regression_accuracy(y_true, y_pred, tolerance=0.1):
+    # Calculate the Euclidean distance between true and predicted coordinates
+    distance = tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1))
+    # Check if the distance is within the tolerance
+    correct_predictions = tf.cast(distance <= tolerance, tf.float32)
+    # Return the mean accuracy
+    return tf.reduce_mean(correct_predictions)
 
 def predict(model_path, classes):
     # Load the trained model
@@ -199,7 +303,8 @@ def predict(model_path, classes):
     predictions = model.predict(new_sample)
 
     # Decode the predictions
-    predicted_class = classes[np.argmax(predictions)]
+    # predicted_class = classes[np.argmax(predictions)]
+    predicted_coordinates = predictions[0]
 
 
 def plot_confusion_matrix(model, X_val, y_val, classes, save_path=None):
@@ -287,6 +392,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_dir', required=True, help='Output directory for data')
     parser.add_argument('--model_dir', required=True, help='Output directory for model')
     parser.add_argument('--log_dir', required=True, help='Output directory for logs')
+    parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--plots_dir', required=True, help='Output directory for plots')
 
     options = parser.parse_args()
@@ -296,6 +402,10 @@ if __name__ == "__main__":
     model_dir = options.model_dir
     log_dir = options.log_dir
     plots_dir = options.plots_dir
+    markers_path = options.markers_path
+
+    markers_pos = np.loadtxt(markers_path, delimiter=",")
+    marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
 
     # Path to the directory containing `.npy` files
     # current folder path 
@@ -307,8 +417,15 @@ if __name__ == "__main__":
     torque_files = natsorted(torque_files)
     # get all the file names
     classes = [f.split('.')[0] for f in torque_files]
-    # classes = ['no_contact', '95', '24', '8']
+    coordinates = {}
     print(f"class: {classes}")
+    for c in classes:
+        if marker_positions.get(c) is None:
+            coordinates['100'] = np.array([0, 0, 0])
+            # coordinates.append(np.array([0, 0, 0]))
+        else:
+            # coordinates.append(marker_positions.get(c))
+            coordinates[c] = marker_positions.get(c)
     model_dir = os.path.join(folder_path, model_dir, session)
     log_dir = os.path.join(folder_path, log_dir, session)
     plots_dir = os.path.join(folder_path, plots_dir, session)  # New directory for plots
@@ -323,10 +440,11 @@ if __name__ == "__main__":
     best_model_path = os.path.join(model_dir, 'best_model.keras')
 
 
-    # classes = ['no_contact', 'front', 'back', 'left', 'right']  # Define your classes
     print(f"torque_dir: {torque_dir}")
-    X_train, X_val, y_train, y_val = preprocess(torque_dir, classes)
-    # add no contact
+    X_train, X_val, y_train, y_val = preprocess(torque_dir, coordinates)
+    print(f"y_train.shape: {y_train.shape}, y_val.shape: {y_val.shape}")
+
+    # Add no contact
     class_to_index = {cls: idx for idx, cls in enumerate(classes)}
     extra_dirs = [name for name in natsorted(os.listdir(torque_dir)) if os.path.isdir(os.path.join(torque_dir, name))][10:20]
     val_indices = random.sample(range(10, 20), 2)
@@ -334,7 +452,6 @@ if __name__ == "__main__":
     val_dirs = []
     for idx, dir in enumerate(natsorted(os.listdir(torque_dir))[10:20]):
         if os.path.isdir(os.path.join(torque_dir, dir)):
-            # if idx == val_idx:
             if idx+10 in val_indices:
                 val_dirs.append(os.path.join(torque_dir, dir))
             else:
@@ -344,51 +461,45 @@ if __name__ == "__main__":
     X_val = [sequence for sequence in X_val]
     y_val = [sequence for sequence in y_val]
     for train_dir in train_dirs:
-        classes = ['no_contact']
-        training_data, labels = load_data(train_dir, class_to_index)
+        training_data, labels = load_data(train_dir, {'100': np.array([0, 0, 0])})
         X_train[-1] = np.concatenate((X_train[-1], training_data[0]), axis=0)
         y_train[-1] = np.concatenate((y_train[-1], labels[0]), axis=0)
     for val_dir in val_dirs:
-        val_data, val_labels = load_data(val_dir, class_to_index)
+        val_data, val_labels = load_data(val_dir, {'100': np.array([0, 0, 0])})
         X_val[-1] = np.concatenate((X_val[-1], val_data[0]), axis=0)
         y_val[-1] = np.concatenate((y_val[-1], val_labels[0]), axis=0)
 
-    # X_train = np.array(X_train)
-    # y_train = np.array(y_train)
-    # X_val = np.array(X_val)
-    # y_val = np.array(y_val)
+
     # One-hot encode labels
     classes = [f.split('.')[0] for f in torque_files]
     X_train_nc = X_train[-1]
-    y_train_nc = to_categorical(y_train[-1], num_classes = len(classes))
+    # y_train_nc = to_categorical(y_train[-1], num_classes = len(classes))
+    y_train_nc = y_train[-1]
     X_val_nc = X_val[-1]
-    y_val_nc = to_categorical(y_val[-1], num_classes = len(classes))
+    # y_val_nc = to_categorical(y_val[-1], num_classes = len(classes))
+    y_val_nc = y_val[-1]
     X_train = np.array(X_train[:-1])
     y_train = np.array(y_train[:-1])
     X_val = np.array(X_val[:-1])
     y_val = np.array(y_val[:-1])
     
-    y_train = to_categorical(y_train, num_classes=len(classes))
-    y_val = to_categorical(y_val, num_classes=len(classes))
+    # classification
+    # y_train = to_categorical(y_train, num_classes=len(classes))
+    # y_val = to_categorical(y_val, num_classes=len(classes))
+
+    # regression
+    y_train = np.array(y_train)
+    y_val = np.array(y_val)
+    print(f"y_train.shape: {y_train.shape}, y_val.shape: {y_val.shape}")
     
     # Reshape X data
     X_train = X_train.reshape(-1, X_train.shape[-1])  # Combine batch and time dimensions
     X_val = X_val.reshape(-1, X_val.shape[-1])
     print(f"X_train.shape: {X_train.shape}, y_train.shape: {y_train.shape}")
     print(f"X_val.shape: {X_val.shape}, y_val.shape: {y_val.shape}")
-    # X_train = X_train.reshape(-1, X_train.shape[-1])
     print(f"X_train_nc.shape: {X_train_nc.shape}, y_train_nc.shape: {y_train_nc.shape}")
-    # X_train = [sequence for sequence in X_train] 
-    # X_val = [sequence for sequence in X_val]
-    # X_train_nc = np.expand_dims(X_train_nc, axis=0)
-    # X_val_nc = np.expand_dims(X_val_nc, axis=0)
-    # print(f"X_train_nc.shape: {X_train_nc.shape}, y_train_nc.shape: {y_train_nc.shape}")
 
-    # X_train.concat(X_train_nc)
-    # X_val.concat(X_val_nc)
-    # print(f"X_train.shape: {len(X_train)}, y_train.shape: {len(y_train)}")
     X_train = np.concatenate((X_train, X_train_nc), axis=0)
-    # X_val = X_val.reshape(-1, X_val.shape[-1])
     X_val = np.concatenate((X_val, X_val_nc), axis=0)
     y_train = y_train.reshape(-1, y_train.shape[-1])
     y_train = np.concatenate((y_train, y_train_nc), axis=0)
@@ -397,10 +508,7 @@ if __name__ == "__main__":
     print(f"X_train.shape: {X_train.shape}, y_train.shape: {y_train.shape}")
     print(f"X_val.shape: {X_val.shape}, y_val.shape: {y_val.shape}")
     
-    # X_train = np.concatenate((X_train, new_X_train), axis=1)
-    # y_train = np.concatenate((y_train, new_y_train), axis=1)
-    # X_val = np.concatenate((X_val, new_X_val), axis=1)
-    # y_val = np.concatenate((y_val, new_y_val), axis=1)
+
     
      # Create t-SNE visualization before training
     # print("Creating t-SNE visualization of training data...")
@@ -409,10 +517,14 @@ if __name__ == "__main__":
 
     model, history = train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir)
     
-    # Evaluate the model on validation set
-    val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=0)
-    print(f"Validation Accuracy: {val_accuracy:.2f}")
-    # predict(model_path, classes)
+    # Evaluate the model on validation set classification
+    # val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=0)
 
-    confusion_matrix_path = os.path.join(plots_dir, f'confusion_matrix.png')
-    plot_confusion_matrix(model, X_val, y_val, classes, save_path=confusion_matrix_path)
+    # regression
+    val_loss, val_accuracy, val_mae, val_euclidean = model.evaluate(X_val, y_val, verbose=0)
+    print(f"Validation Accuracy: {val_accuracy:.2f}")
+    print(f"Validation Euclidean Distance: {val_euclidean:.4f}")
+    print(f"Validation MAE: {val_mae:.2f}")
+
+    # confusion_matrix_path = os.path.join(plots_dir, f'confusion_matrix.png')
+    # plot_confusion_matrix(model, X_val, y_val, classes, save_path=confusion_matrix_path)

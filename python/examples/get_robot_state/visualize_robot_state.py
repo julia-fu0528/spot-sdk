@@ -30,8 +30,6 @@ def load_joint_torques(torque_path):
     torque_dict = {}
     for i in range(len(state)):
         state_dict[i] = state[i].kinematic_state.joint_states
-        print(f"state_dict: {state_dict[i][0]}")
-        sys.exit()
         torque_dict[i] = []
         for joint in state_dict[i]:
             joint_name = getattr(joint, 'name', None)

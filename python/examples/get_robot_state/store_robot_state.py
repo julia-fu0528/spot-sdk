@@ -150,7 +150,7 @@ def main():
     # os.makedirs("data/test1203", exist_ok=True)
     for idx, pos in marker_positions.items():
         # if int(idx)<57:
-            # continue
+        #     continue
         # Create marker for current position
         marker = create_red_markers([pos], radius=0.02)[0]
         

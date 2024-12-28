@@ -101,6 +101,21 @@ def visualize_prediction(marker_positions, predicted_class, robot_meshes):
     print(f"Visualizing prediction for class: {predicted_class}")
     visualize_with_camera(geometries, camera_params)
 
+
+@tf.keras.utils.register_keras_serializable()
+def euclidean_distance(y_true, y_pred):
+    return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1)))
+
+@tf.keras.utils.register_keras_serializable()
+def regression_accuracy(y_true, y_pred, tolerance=0.1):
+    # Calculate the Euclidean distance between true and predicted coordinates
+    distance = tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1))
+    # Check if the distance is within the tolerance
+    correct_predictions = tf.cast(distance <= tolerance, tf.float32)
+    # Return the mean accuracy
+    return tf.reduce_mean(correct_predictions)
+
+
 def main():
     import argparse
     from bosdyn.client.robot_state import RobotStateClient
@@ -180,48 +195,45 @@ def main():
     torque_files = natsorted(torque_files)
     # get all the file names
     classes = [f.split('.')[0] for f in torque_files]
+    coordinates = {}
+    print(f"class: {classes}")
+    for c in classes:
+        if marker_positions.get(c) is None:
+            coordinates['100'] = np.array([0, 0, 0])
+            # coordinates.append(np.array([0, 0, 0]))
+        else:
+            # coordinates.append(marker_positions.get(c))
+            coordinates[c] = marker_positions.get(c)
 
    
     vis = o3d.visualization.Visualizer() 
     vis.create_window()
     visualizer = SpotVisualizer(vis=vis)
-    # visualizer.visualize()
+
     radius = 0.04
-    # marker = create_red_markers([[0, 0, 0.075]], radius=radius)[0]
-    # for robot_mesh in robot_meshes:
-    #     vis.add_geometry(robot_mesh)
-    total_mesh = o3d.geometry.TriangleMesh()
-
-    for mesh in visualizer.o3d_meshes_default:
-       total_mesh += mesh
-    point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
-    # sampled_points = sample_points_from_mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles), num_points)
-
-    # o3d.visualization.draw_geometries([point_cloud])
-    # vis.add_geometry(point_cloud)
-    alpha = 0.1
-    sliding_win = 10
-    buffer = np.zeros((sliding_win, 101))
+    alpha = 0.2
+    sliding_win = 15
+    # sliding_win = 5
+    # buffer = np.zeros((sliding_win, 101))
+    buffer = np.zeros((sliding_win, 3))
     weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
+    # normalize - in the regression case, weighted average
+    weights = weights / np.sum(weights)
 
-    original_point_colors = np.asarray(point_cloud.colors).copy()
+    original_colors = [np.asarray(pcd.colors).copy() for pcd in visualizer.point_clouds]
     # original_vertex_colors = np.asarray(total_mesh.vertex_colors).copy()
    
     # Add the combined mesh to the visualizer
-    # vis.add_geometry(total_mesh)
-    # body_mesh = robot_meshes[0]
-    # body_mesh = body_mesh.filter_smooth_taubin(number_of_iterations=5)
-    # body_mesh.compute_vertex_normals()
-    pcd_points = np.asarray(point_cloud.points)
-    # vertices = np.asarray(total_mesh.vertices)
-    # sampled_points = sample_points_from_mesh(np.asarray(robot_meshes[0].vertices), np.asarray(robot_meshes[0].triangles), 10000)
-    kdtree = cKDTree(pcd_points)
+    all_points = np.concatenate([np.asarray(pcd.points) for pcd in visualizer.point_clouds])
+    kdtree = cKDTree(all_points)
 
-    
+    point_cloud_sizes = [len(np.asarray(pcd.points)) for pcd in visualizer.point_clouds]
+    point_cloud_boundaries = np.cumsum([0] + point_cloud_sizes) 
 
     try:
         while True:
+            start = time.time()
             state = robot_state_client.get_robot_state()
 
             # Preprocess the data for inference
@@ -236,47 +248,49 @@ def main():
                 else:
                     print(f"Joint {joint_info['name']} not found in URDF.")
             visualizer.visualize(cfg=joint_positions)
-            for mesh in visualizer.o3d_meshes_default:
-                vis.update_geometry(mesh)
-            vis.poll_events()
-            vis.update_renderer()
-            # o3d.visualization.draw_geometries(robot_meshes)
-            # new_total_mesh = o3d.geometry.TriangleMesh()
-            # for mesh in visualizer.o3d_meshes_default:
-            #     new_total_mesh += mesh
-            # vis.update_geometry(total_mesh)
-            # new_points = np.asarray(total_mesh.sample_points_uniformly(number_of_points=1000000).points)
-            # point_cloud.points = o3d.utility.Vector3dVector(new_points)
-            # point_cloud.estimate_normals()
-            # point_cloud = total_mesh.sample_points_uniformly(number_of_points=1000000)
+
+            # Real time prediction
             buffer = np.roll(buffer, 1, axis=0) 
             buffer[0] = model.predict(processed_data)
-            predictions = np.dot(weights, buffer).reshape(-1, 101)
-            predicted_class_index = np.argmax(predictions)
+            # predictions = np.dot(weights, buffer).reshape(-1, 101)
+            predictions = np.dot(weights, buffer)
+            # predictions = np.mean(buffer, axis = 0)
+            print(f"prediction:{buffer[0]}")
+            # predicted_class_index = np.argmax(predictions)
             confidence = np.max(predictions)
-            predicted_class = classes[predicted_class_index]
-            print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
-            # total_mesh.vertex_colors = o3d.utility.Vector3dVector(original_vertex_colors)
-            point_cloud.colors = o3d.utility.Vector3dVector(original_point_colors)
-            # np.asarray(robot_meshes[0].vertex_colors)[:] = original_vertex_colors
-            if predicted_class == "no_contact" :
+
+
+            # Compute the weighted variance
+            weighted_mean = predictions
+            differences = buffer - weighted_mean  # Difference between each row and the mean
+            squared_differences = differences**2
+            weighted_variance = np.dot(weights, np.mean(squared_differences, axis=1))  # Average squared differences
+            confidence = 1 / (1 + np.sqrt(weighted_variance))  # Inverse relation: lower variance → higher confidence
+
+
+            # predicted_class = classes[predicted_class_index]
+            print(f"Prediction: {predictions}, Confidence: {confidence:.2f}")
+            for pcd, orig_color in zip(visualizer.point_clouds, original_colors):
+                pcd.colors = o3d.utility.Vector3dVector(orig_color)
+            # if predicted_class == "no_contact" :
             # or confidence < 0.1:
-                pos = [0, 0, 0]
-                print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
+                # pos = [0, 0, 0]
+                # print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
 
             # Visualize the prediction
-            # visualize_prediction(marker_positions, predicted_class, robot_meshes)
-            else:
-                pos = marker_positions.get(predicted_class)
+            # else:
+            # pos = marker_positions.get(predicted_class)
+            indices = kdtree.query_ball_point(predictions, radius)
 
-                indices = kdtree.query_ball_point(pos, radius)
-                # colors = np.asarray(total_mesh.vertex_colors)
-                colors = np.asarray(point_cloud.colors)
-                for idx in indices:
-                    if 0 <= idx < len(colors):  # Validate index range
-                        colors[idx] = [1, 0, 0]
+            for idx in indices:
+                pcd_idx = np.searchsorted(point_cloud_boundaries, idx, side='right') - 1
+                local_idx = idx - point_cloud_boundaries[pcd_idx]
+                    
+                colors = np.asarray(visualizer.point_clouds[pcd_idx].colors)
+                colors[local_idx] = [1, 0, 0]
+                visualizer.point_clouds[pcd_idx].colors = o3d.utility.Vector3dVector(colors)
                 # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
-                point_cloud.colors = o3d.utility.Vector3dVector(colors)
+                # point_cloud.colors = o3d.utility.Vector3dVector(colors)
                 # total_mesh.compute_vertex_normals()
                 # R = np.eye(3)
                 # T = np.eye(4)
@@ -288,6 +302,8 @@ def main():
 
             vis.poll_events()
             vis.update_renderer()
+            print(f"loop iteration time: {time.time() - start:.2f}s")
+            print(f"loop iteration frequency: {1 / (time.time() - start):.2f}Hz")
     except KeyboardInterrupt:
         print("Exiting real-time inference...")
     except Exception as e:

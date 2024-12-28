@@ -9,7 +9,7 @@ class SpotVisualizer():
         self.vis = vis
         self.prev_fks = []
         self.point_clouds = []
-        self.points_per_mesh = 100000
+        self.points_per_mesh = 400
         self.robot = URDF.load("spot_description/spot.urdf")
         
         # link -> body
@@ -50,7 +50,10 @@ class SpotVisualizer():
 
             o3d_mesh.transform(trimesh_fk[tm])
             self.prev_fks.append(trimesh_fk[tm]) # world -> T1
-            pcd = o3d_mesh.sample_points_uniformly(number_of_points=self.points_per_mesh)
+            if len(tm.vertices) > 1000:
+                pcd = o3d_mesh.sample_points_uniformly(number_of_points=100 * self.points_per_mesh)
+            else:
+                pcd = o3d_mesh.sample_points_uniformly(number_of_points=self.points_per_mesh)
             self.vis.add_geometry(pcd)
             self.point_clouds.append(pcd)
             o3d_meshes.append(o3d_mesh)
