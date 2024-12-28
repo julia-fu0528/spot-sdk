@@ -24,52 +24,44 @@ import seaborn as sns
 from visualize_robot_state import load_joint_torques, load_joint_positions, vis_joint_torques
 
 
-def load_data(torque_dir, coordinates, seq = False):
-    # torque_data = []
+def load_data(torque_dir, classes, classify=False, num_classes = None, seq = False):
+    # in classification task, 2nd argument is class_to_index 
+    # in regression task, 2nd argument is coordinates, in both cases are dicts w str keys
+
     training_data = []
     labels = []
 
-    # no_contact_torque, _, _, _ = load_joint_torques(os.path.join(torque_dir, "no_contact.npy"))
-    # no_contact_torque = 2 * ((no_contact_torque - no_contact_torque.min()) / (no_contact_torque.max() - no_contact_torque.min())) - 1
-    # offset = np.mean(no_contact_torque, axis=0)  # Use no-contact torque as offsett
     min_length = np.inf
-    print(f"torque_dir: {torque_dir}")
     for i, torque_file in enumerate(natsorted(os.listdir(torque_dir))):
         if torque_file.endswith(".npy"):
             torque_path = os.path.join(torque_dir, torque_file)
             class_name = torque_file.split(".")[0]  # Extract label from the filename
             if class_name == 'no_contact':
-                class_name = '100'
-            if class_name in coordinates.keys():
-                coordinate = coordinates[class_name]
+                if not classify:
+                    class_name = '100'
+            if class_name in classes.keys():
+                label = classes[class_name]
                 torque, _, _, _ = load_joint_torques(torque_path)
                 if torque.shape[0]  < min_length:
                     min_length = torque.shape[0]
                     print(f"new min length: {min_length}")
                 joint_angle, _, _, _ = load_joint_positions(torque_path)
-                # torque = torque - offset  # Subtract offset
-                # normalized_torque = 2 * ((torque - torque.min()) / (torque.max() - torque.min())) - 1
-                # data = np.hstack((normalized_torque, joint_angle))
                 data = np.hstack((torque, joint_angle))
-                # print(f"torque file: {torque_file}, data.shape: {data.shape}")
                 normalized_data = 2 * ((data - data.min()) / (data.max() - data.min())) - 1
-                # torque_data.append(normalized_torque)
                 training_data.append(normalized_data)
-                # print(f"training_data.shape: {training_data[-1].shape}")
-                # torque_data.append(torque) 
-                # labels.append(class_name * len(torque))
-                # labels.append([class_to_index[class_name]] * len(torque))  # Map class name to index
-                labels.append(np.tile(coordinate, (len(torque), 1)))
+                if classify:
+                    if num_classes is None:
+                        raise Exception("num_classes must be provided for classification")
+                    label = to_categorical([label], num_classes=num_classes)
+                labels.append(np.tile(label, (len(torque), 1)))
+                
             
     # get the min length of the torque data
-    # min_length = min([len(torque) for torque in torque_data]),
-    # torque_data = [torque[:min_length] for torque in torque_data]
     training_data = [data[:min_length] for data in training_data]
+    print(f"min_length: {min_length}")
     print(f"training data len: {training_data[0].shape}") # 101, 557, 24
     labels = [label[:min_length] for label in labels]
     print(f"labels len: {labels[0].shape}") # 101, 557
-    # torque_data = pad_sequences(torque_data, padding='post', dtype='float32')
-    # torque_data = np.array(torque_data)
     training_data = np.array(training_data)
     labels = np.array(labels)
     # print(f"labels: {labels}")
@@ -78,37 +70,34 @@ def load_data(torque_dir, coordinates, seq = False):
     return training_data, labels
 
 
-def preprocess(torque_dir, coordinates):
-    # class_to_index = {cls: idx for idx, cls in enumerate(classes)}
+def preprocess(torque_dir, classes, classify=False, num_classes=None):
+    if classify and num_classes is None:
+        raise Exception("num_classes must be provided for classification")
     # count the number of directories in torque_dir
     num_dir = len([name for name in os.listdir(torque_dir) if os.path.isdir(os.path.join(torque_dir, name))])
     print(f"num_dir: {num_dir}")
     num_dir = 20
     # randomly pick a number from 0 to num_dir
-    # val_idx = random.randint(0, num_dir)
-    val_indices = random.sample(range(num_dir), 2)
+    val_indices = random.sample(range(num_dir), 4)
     train_dirs = []
     dirs = natsorted(os.listdir(torque_dir))
     dirs = dirs[:10] + dirs[-11:]
     # dirs = dirs[:5]
     for idx, dir in enumerate(dirs):
         if os.path.isdir(os.path.join(torque_dir, dir)):
-            # if idx == val_idx:
             if idx in val_indices:
                 val_dir = os.path.join(torque_dir, dir)
             else:
                 train_dirs.append(os.path.join(torque_dir, dir))
     for train_dir in train_dirs:
-        training_data, labels = load_data(train_dir, coordinates)
+        training_data, labels = load_data(train_dir, classes, classify, num_classes)
         if 'X_train' in locals():
-            # min_len = min(X_train.shape[1], training_data.shape[1])
-            # print(f"min_len: {min_len}")
             X_train = np.concatenate((X_train, training_data), axis=1)
             y_train = np.concatenate((y_train, labels), axis=1)
         else:
             X_train = training_data
             y_train = labels
-    X_val, y_val = load_data(val_dir, coordinates)
+    X_val, y_val = load_data(val_dir, classes, classify, num_classes)
     X_all, y_all = np.append(X_train, X_val, axis=1), np.append(y_train, y_val, axis=1)
     print(f"X_all.shape: {X_all.shape}, y_all.shape: {y_all.shape}")
     len_data = X_all.shape[1]
@@ -116,22 +105,7 @@ def preprocess(torque_dir, coordinates):
     X_train, y_train = X_all[:, train_idx, :], y_all[:, train_idx]
     val_idx = list(set(range(len_data)) - set(train_idx))
     X_val, y_val = X_all[:, val_idx, :], y_all[:, val_idx]
-    # torque_data, labels = load_data(torque_dir, class_to_index)
 
-    # Split the second dimension (time steps)
-    # time_steps = torque_data.shape[1]
-    # split_index = int(0.8 * time_steps)
-
-    # train_idx = random.sample(range(time_steps), split_index)
-    # val_idx = list(set(range(time_steps)) - set(train_idx))
-    
-    # Split and reshape data
-    # X_train = torque_data[:, train_idx, :]
-    # X_val = torque_data[:, val_idx, :]
-    
-    # Reshape y data to match X
-    # y_train = labels_one_hot[:, train_idx, :].reshape(-1, labels_one_hot.shape[-1])
-    # y_val = labels_one_hot[:, val_idx, :].reshape(-1, labels_one_hot.shape[-1])
     return X_train, X_val, y_train, y_val
 
 
@@ -156,7 +130,7 @@ def preprocess_seq(torque_dir, classes):
             else:
                 train_dirs.append(os.path.join(torque_dir, dir))
     for train_dir in train_dirs:
-        training_data, labels = load_data(train_dir, class_to_index)
+        training_data, labels = load_data(train_dir, class_to_index, num_classes)
         if 'X_train' in locals():
             # min_len = min(X_train.shape[1], training_data.shape[1])
             # print(f"min_len: {min_len}")
@@ -165,7 +139,7 @@ def preprocess_seq(torque_dir, classes):
         else:
             X_train = training_data
             y_train = labels
-    X_val, y_val = load_data(val_dir, class_to_index)
+    X_val, y_val = load_data(val_dir, class_to_index, num_classes)
     X_all, y_all = np.append(X_train, X_val, axis=1), np.append(y_train, y_val, axis=1)
     print(f"X_all.shape: {X_all.shape}, y_all.shape: {y_all.shape}")
     len_data = X_all.shape[1]
@@ -195,17 +169,27 @@ def preprocess_seq(torque_dir, classes):
 
     return X_train, X_val, y_train, y_val
 
-def create_model(input_shape, num_classes):
-    model = Sequential([
-        Input(shape=input_shape),      # Define input shape explicitly
-        Flatten(),                     # Flatten the input
-        Dense(128, activation='relu'), # Hidden layer with 128 neurons
-        Dense(256, activation='relu'),  # Hidden layer with 64 neurons
-        Dense(512, activation='relu'),
-        Dense(256, activation='relu'),
-        # Dense(num_classes, activation='softmax')  # classification
-        Dense(3)  # regression
-    ])
+def create_model(input_shape, classify, out_dim):
+    if classify:
+        model = Sequential([
+            Input(shape=input_shape),      # Define input shape explicitly
+            Flatten(),                     # Flatten the input
+            Dense(128, activation='relu'), # Hidden layer with 128 neurons
+            Dense(256, activation='relu'),  # Hidden layer with 64 neurons
+            Dense(512, activation='relu'),
+            Dense(256, activation='relu'),
+            Dense(out_dim, activation='softmax') 
+        ])
+    else:
+        model = Sequential([
+            Input(shape=input_shape),      # Define input shape explicitly
+            Flatten(),                     # Flatten the input
+            Dense(128, activation='relu'), # Hidden layer with 128 neurons
+            Dense(256, activation='relu'),  # Hidden layer with 64 neurons
+            Dense(512, activation='relu'),
+            Dense(256, activation='relu'),
+            Dense(out_dim)  
+        ])
     return model
     
 
@@ -221,28 +205,48 @@ def create_model_conv(input_shape, num_classes):
    return model
 
 
-def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
+def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir, classify, ground_truth_coords):
+
     # Create the model
     input_shape = X_train.shape[1:]  # Shape of a single input sample
     num_classes = len(classes)       # Number of output classes
-    model = create_model(input_shape, num_classes)
+    if classify:
+        out_dim = num_classes
+    else:
+        out_dim = 3
+    model = create_model(input_shape, classify, out_dim)
     model.summary()
 
-    # Compile the model classification
-    # model.compile(
-    #     # optimizer=tf.keras.optimizers.Adam(learning_rate=5e-3),# 5e-4
-    #     optimizer='adam',
-    #     loss='categorical_crossentropy',  # Cross-entropy loss for classification
-    #     metrics=['accuracy']
-    # )
+    ground_truth_coords_list = [coordinates[str(i)] for i in range(len(coordinates))]
+    ground_truth_coords_tensor = tf.convert_to_tensor(ground_truth_coords_list, dtype=tf.float32)
 
-    # regression
-    model.compile(
-        # optimizer=tf.keras.optimizers.Adam(learning_rate=5e-3),# 5e-4
-        optimizer='adam',
-        loss='mse',  # Cross-entropy loss for classification
-        metrics=[regression_accuracy, 'mae', euclidean_distance]
-    )
+    def named_euclidean_distance(y_true, y_pred):
+        return euclidean_distance(y_true, y_pred, classify, ground_truth_coords_tensor)
+    named_euclidean_distance.__name__ = 'euclidean_distance'
+    
+    if classify:
+
+        # Compile the model 
+        model.compile(
+            # optimizer=tf.keras.optimizers.Adam(learning_rate=5e-3),# 5e-4
+            optimizer='adam',
+            loss='categorical_crossentropy',  # Cross-entropy loss for classification
+            metrics=['accuracy', named_euclidean_distance]
+        )
+
+    else: # regression
+        def named_regression_accuracy(y_true, y_pred):
+            return regression_accuracy(y_true, y_pred, ground_truth_coords_tensor)
+        named_regression_accuracy.__name__ = 'regression_accuracy'
+
+        # Compile the model 
+        model.compile(
+            # optimizer=tf.keras.optimizers.Adam(learning_rate=5e-3),# 5e-4
+            optimizer='adam',
+            loss='mse',  # Cross-entropy loss for classification
+            metrics=[named_regression_accuracy, named_euclidean_distance]
+            # metrics=[named_regression_accuracy, 'mae', euclidean_distance]
+        )
     
 
     # Create TensorBoard callback with timestamped log directory
@@ -281,17 +285,45 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir):
     return model, history
 
 
-def euclidean_distance(y_true, y_pred):
-    return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1)))
+def euclidean_distance(y_true, y_pred, classify, ground_truth_coords = None):
+    if classify:
+        true_coord_index = tf.argmax(y_true, axis=-1)  # Index of the ground truth
+        pred_coord_index = tf.argmax(y_pred, axis=-1)  # Index of the predicted class
+
+        # Get the corresponding coordinates
+        true_coord = tf.gather(ground_truth_coords, true_coord_index)  # Shape: [batch_size, 3]
+        pred_coord = tf.gather(ground_truth_coords, pred_coord_index)
+
+        return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(true_coord - pred_coord), axis=-1)))
+    else: # regression
+        return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1)))
 
 
-def regression_accuracy(y_true, y_pred, tolerance=0.1):
-    # Calculate the Euclidean distance between true and predicted coordinates
-    distance = tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1))
-    # Check if the distance is within the tolerance
-    correct_predictions = tf.cast(distance <= tolerance, tf.float32)
-    # Return the mean accuracy
-    return tf.reduce_mean(correct_predictions)
+# def regression_accuracy(y_true, y_pred, tolerance=0.1):
+#     # Calculate the Euclidean distance between true and predicted coordinates
+#     distance = tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1))
+#     # Check if the distance is within the tolerance
+#     correct_predictions = tf.cast(distance <= tolerance, tf.float32)
+#     # Return the mean accuracy
+#     return tf.reduce_mean(correct_predictions)
+def regression_accuracy(y_true, y_pred, ground_truth_coords):
+    print(f"y_true type: {type(y_true)}")
+    print(f"y_pred type: {type(y_pred)}")
+    y_true = tf.reshape(y_true, [-1, 3])
+    y_pred = tf.reshape(y_pred, [-1, 3])
+    y_pred_expanded = tf.expand_dims(y_pred, axis=1)  # Shape: [batch_size, 1, 3]
+    y_true_expanded = tf.expand_dims(y_true, axis=1)  # Shape: [batch_size, 1, 3]
+
+    distances = tf.sqrt(tf.reduce_sum(tf.square(y_pred_expanded - y_true_expanded), axis=-1))  # Shape: [batch_size, num_classes]
+
+    nearest_indices = tf.argmin(distances, axis=1)  # Shape: [batch_size]
+
+    nearest_coords = tf.gather(ground_truth_coords, nearest_indices)  # Shape: [batch_size, 3]
+
+    correct_predictions = tf.reduce_all(tf.equal(nearest_coords, y_true), axis=-1)  # Shape: [batch_size]
+
+    return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
+
 
 def predict(model_path, classes):
     # Load the trained model
@@ -394,16 +426,27 @@ if __name__ == "__main__":
     parser.add_argument('--log_dir', required=True, help='Output directory for logs')
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--plots_dir', required=True, help='Output directory for plots')
+    parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
+
 
     options = parser.parse_args()
 
+    classify = options.classify
+
     session = options.session
     data_dir = options.data_dir
-    model_dir = options.model_dir
-    log_dir = options.log_dir
-    plots_dir = options.plots_dir
     markers_path = options.markers_path
 
+    if classify:
+        model_dir = os.path.join("classify", options.model_dir)
+        log_dir = os.path.join("classify", options.log_dir)
+        plots_dir = os.path.join("classify", options.plots_dir)
+    else:
+        model_dir = os.path.join("regression", options.model_dir)
+        log_dir = os.path.join("regression", options.log_dir)
+        plots_dir = os.path.join("regression", options.plots_dir)
+
+ 
     markers_pos = np.loadtxt(markers_path, delimiter=",")
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
 
@@ -417,6 +460,7 @@ if __name__ == "__main__":
     torque_files = natsorted(torque_files)
     # get all the file names
     classes = [f.split('.')[0] for f in torque_files]
+    num_classes = len(classes)
     coordinates = {}
     print(f"class: {classes}")
     for c in classes:
@@ -441,7 +485,12 @@ if __name__ == "__main__":
 
 
     print(f"torque_dir: {torque_dir}")
-    X_train, X_val, y_train, y_val = preprocess(torque_dir, coordinates)
+    if classify:
+        class_to_label = {cls: idx for idx, cls in enumerate(classes)}
+    else:
+        class_to_label = coordinates
+    
+    X_train, X_val, y_train, y_val = preprocess(torque_dir, class_to_label, classify, num_classes)
     print(f"y_train.shape: {y_train.shape}, y_val.shape: {y_val.shape}")
 
     # Add no contact
@@ -461,11 +510,17 @@ if __name__ == "__main__":
     X_val = [sequence for sequence in X_val]
     y_val = [sequence for sequence in y_val]
     for train_dir in train_dirs:
-        training_data, labels = load_data(train_dir, {'100': np.array([0, 0, 0])})
+        if classify:
+            training_data, labels = load_data(train_dir, {'no_contact': 100}, classify, num_classes)
+        else:
+            training_data, labels = load_data(train_dir, {'100': np.array([0, 0, 0])}, classify)
         X_train[-1] = np.concatenate((X_train[-1], training_data[0]), axis=0)
         y_train[-1] = np.concatenate((y_train[-1], labels[0]), axis=0)
     for val_dir in val_dirs:
-        val_data, val_labels = load_data(val_dir, {'100': np.array([0, 0, 0])})
+        if classify:   
+            val_data, val_labels = load_data(val_dir, {'no_contact': 100}, classify, num_classes)
+        else:
+            val_data, val_labels = load_data(val_dir, {'100': np.array([0, 0, 0])}, classify)
         X_val[-1] = np.concatenate((X_val[-1], val_data[0]), axis=0)
         y_val[-1] = np.concatenate((y_val[-1], val_labels[0]), axis=0)
 
@@ -515,16 +570,15 @@ if __name__ == "__main__":
     # tsne_path = os.path.join(plots_dir, 'tsne_visualization.png')
     # plot_tsne(X_train, y_train, classes, save_path=tsne_path)
 
-    model, history = train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir)
+    model, history = train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir, classify, coordinates)
     
     # Evaluate the model on validation set classification
     # val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=0)
 
     # regression
-    val_loss, val_accuracy, val_mae, val_euclidean = model.evaluate(X_val, y_val, verbose=0)
+    val_loss, val_accuracy,val_euclidean = model.evaluate(X_val, y_val, verbose=0)
     print(f"Validation Accuracy: {val_accuracy:.2f}")
     print(f"Validation Euclidean Distance: {val_euclidean:.4f}")
-    print(f"Validation MAE: {val_mae:.2f}")
 
-    # confusion_matrix_path = os.path.join(plots_dir, f'confusion_matrix.png')
-    # plot_confusion_matrix(model, X_val, y_val, classes, save_path=confusion_matrix_path)
+    confusion_matrix_path = os.path.join(plots_dir, f'confusion_matrix.png')
+    plot_confusion_matrix(model, X_val, y_val, classes, save_path=confusion_matrix_path)

@@ -54,6 +54,35 @@ def collect_data(output_path, hostname, command, duration=10):
 
     return True
 
+def get_vertex_normal_at_position(mesh, position):
+    """
+    Get the vertex normal of a mesh at a specific position.
+
+    Args:
+        mesh (o3d.geometry.TriangleMesh): The mesh object.
+        position (list or np.ndarray): The 3D position to query.
+
+    Returns:
+        np.ndarray: The normal vector at the closest vertex.
+    """
+    # Ensure the mesh has vertex normals computed
+    if not mesh.has_vertex_normals():
+        mesh.compute_vertex_normals()
+
+    # Get all vertex positions
+    vertices = np.asarray(mesh.vertices)
+
+    # Compute the closest vertex index
+    position = np.array(position)
+    distances = np.linalg.norm(vertices - position, axis=1)
+    closest_vertex_index = np.argmin(distances)
+
+    # Get the normal of the closest vertex
+    normals = np.asarray(mesh.vertex_normals)
+    vertex_normal = normals[closest_vertex_index]
+
+    return vertex_normal
+
 def main():
     import argparse
 
@@ -153,6 +182,9 @@ def main():
         #     continue
         # Create marker for current position
         marker = create_red_markers([pos], radius=0.02)[0]
+
+        normal = get_vertex_normal_at_position(robot_meshes[0], pos)
+
         
         # Create camera parameters facing the marker
         camera_params = create_viewing_parameters(pos)

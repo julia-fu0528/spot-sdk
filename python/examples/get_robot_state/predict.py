@@ -199,7 +199,7 @@ def main():
     print(f"class: {classes}")
     for c in classes:
         if marker_positions.get(c) is None:
-            coordinates['100'] = np.array([0, 0, 0])
+            coordinates['100'] = np.array([0, 0, 1000])
             # coordinates.append(np.array([0, 0, 0]))
         else:
             # coordinates.append(marker_positions.get(c))
