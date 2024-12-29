@@ -6,7 +6,6 @@ from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from pathlib import Path
-from scipy.signal import windows
 import argparse
 from natsort import natsorted
 import torch
@@ -60,6 +59,7 @@ class JointLabel:
         self.preprocess_data()
         
     def preprocess_data(self):
+        print(f"Preprocessing data...")
         num_dir = len([name for name in os.listdir(self.torque_dir) if os.path.isdir(os.path.join(self.torque_dir, name))])
         num_dir = 9
         # randomly pick a number from 0 to num_dir
@@ -78,8 +78,10 @@ class JointLabel:
             self.load_data(train_dir, mode='train')
         for val_dir in val_dirs:
             self.load_data(val_dir, mode='val')
+        print(f"Finished data preprocessing")
     
     def load_data(self, dir, mode='train'):
+        print(f"Loading data from {dir}...")
         for i, torque_file in enumerate(natsorted(os.listdir(dir))):
             if torque_file.endswith(".npy"):
                 torque_path = os.path.join(dir, torque_file)
@@ -105,13 +107,15 @@ class JointLabel:
                             self.training_labels.append(label)
                         else:
                             self.validation_labels.append(label)
+        print(f"Finished loading data from {dir}")
 
 class SpotDataset(Dataset):
-    def __init__(self, mode='train') -> None:
+    def __init__(self, dataset_mode = 'regression', mode='train') -> None:
         super().__init__()
         self.mode = mode
-        self.joint_data = np.load(f"preprocessed_data/{mode}_joint_data.npy")
-        self.contact_labels = np.load(f"preprocessed_data/{mode}_contact_labels.npy")
+        self.dataset_mode = dataset_mode
+        self.joint_data = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_joint_data.npy")
+        self.contact_labels = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_contact_labels.npy")
 
 
         assert len(self.joint_data) == len(self.contact_labels), "Length of joint data and contact labels should be the same"
@@ -168,7 +172,7 @@ if __name__ == "__main__":
 
     joint_label = JointLabel(torque_dir, markers_path, classify=classify)
     
-
+    print(f"Saving training and validation data")
     if classify:
         dataset_mode = "classify"
     else:
@@ -179,6 +183,7 @@ if __name__ == "__main__":
     np.save(os.path.join(save_dir,"train_contact_labels.npy"), joint_label.training_labels)
     np.save(os.path.join(save_dir,"val_joint_data.npy"), joint_label.validation_data)
     np.save(os.path.join(save_dir,"val_contact_labels.npy"), joint_label.validation_labels)
+    print(f"Training and validation data saved to {save_dir}")
 
-    train_dataset = SpotDataset(mode='train')
-    train_dataset[0]
+    train_dataset = SpotDataset(dataset_mode, mode='train')
+    print(train_dataset[0])

@@ -19,3 +19,9 @@ python dataset.py --session gouger1209 --data_dir data \
 
 # pip3 install torch torchvision torchaudio
 # pip install pytorch_lightning==1.6.0
+# pip install urdfpy
+# pip install lightning
+# pip install open3d
+
+
+
