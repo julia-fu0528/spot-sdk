@@ -59,7 +59,7 @@ def load_data(torque_dir, classes, classify=False, num_classes = None, seq = Fal
     # get the min length of the torque data
     training_data = [data[:min_length] for data in training_data]
     print(f"min_length: {min_length}")
-    print(f"training data len: {training_data[0].shape}") # 101, 557, 24
+    print(f"training data len: {training_data[0].shape}") # 101, 557, 24 //todo
     labels = [label[:min_length] for label in labels]
     print(f"labels len: {labels[0].shape}") # 101, 557
     training_data = np.array(training_data)
@@ -76,7 +76,7 @@ def preprocess(torque_dir, classes, classify=False, num_classes=None):
     # count the number of directories in torque_dir
     num_dir = len([name for name in os.listdir(torque_dir) if os.path.isdir(os.path.join(torque_dir, name))])
     print(f"num_dir: {num_dir}")
-    num_dir = 20
+    num_dir = 9
     # randomly pick a number from 0 to num_dir
     val_indices = random.sample(range(num_dir), 4)
     train_dirs = []
@@ -100,11 +100,11 @@ def preprocess(torque_dir, classes, classify=False, num_classes=None):
     X_val, y_val = load_data(val_dir, classes, classify, num_classes)
     X_all, y_all = np.append(X_train, X_val, axis=1), np.append(y_train, y_val, axis=1)
     print(f"X_all.shape: {X_all.shape}, y_all.shape: {y_all.shape}")
-    len_data = X_all.shape[1]
-    train_idx = random.sample(range(len_data), int(0.8 * len_data))
-    X_train, y_train = X_all[:, train_idx, :], y_all[:, train_idx]
-    val_idx = list(set(range(len_data)) - set(train_idx))
-    X_val, y_val = X_all[:, val_idx, :], y_all[:, val_idx]
+    # len_data = X_all.shape[1]
+    # train_idx = random.sample(range(len_data), int(0.8 * len_data))
+    # X_train, y_train = X_all[:, train_idx, :], y_all[:, train_idx]
+    # val_idx = list(set(range(len_data)) - set(train_idx))
+    # X_val, y_val = X_all[:, val_idx, :], y_all[:, val_idx]
 
     return X_train, X_val, y_train, y_val
 
@@ -241,8 +241,8 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir, 
 
         # Compile the model 
         model.compile(
-            # optimizer=tf.keras.optimizers.Adam(learning_rate=5e-3),# 5e-4
-            optimizer='adam',
+            optimizer=tf.keras.optimizers.Adam(learning_rate=5e-4),# 5e-4
+            # optimizer='adam',
             loss='mse',  # Cross-entropy loss for classification
             metrics=[named_regression_accuracy, named_euclidean_distance]
             # metrics=[named_regression_accuracy, 'mae', euclidean_distance]
@@ -269,7 +269,7 @@ def train(X_train, X_val, y_train, y_val, model_path, best_model_path, log_dir, 
         batch_size=128,                 # Batch size
         callbacks=[
             tensorboard_callback,
-            tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True),
+            tf.keras.callbacks.EarlyStopping(patience=20, restore_best_weights=True),
             tf.keras.callbacks.ModelCheckpoint(
                 best_model_path, 
                 save_best_only=True,
@@ -298,30 +298,58 @@ def euclidean_distance(y_true, y_pred, classify, ground_truth_coords = None):
     else: # regression
         return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1)))
 
+# def regression_accuracy(y_true, y_pred, ground_truth_coords):
+#     print(f"y_true type: {type(y_true)}")
+#     print(f"y_pred type: {type(y_pred)}")
+#     y_true = tf.reshape(y_true, [-1, 3])
+#     y_pred = tf.reshape(y_pred, [-1, 3])
+#     y_pred_expanded = tf.expand_dims(y_pred, axis=1)  # Shape: [batch_size, 1, 3]
+#     y_true_expanded = tf.expand_dims(y_true, axis=1)  # Shape: [batch_size, 1, 3]
 
-# def regression_accuracy(y_true, y_pred, tolerance=0.1):
-#     # Calculate the Euclidean distance between true and predicted coordinates
-#     distance = tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1))
-#     # Check if the distance is within the tolerance
-#     correct_predictions = tf.cast(distance <= tolerance, tf.float32)
-#     # Return the mean accuracy
-#     return tf.reduce_mean(correct_predictions)
-def regression_accuracy(y_true, y_pred, ground_truth_coords):
-    print(f"y_true type: {type(y_true)}")
-    print(f"y_pred type: {type(y_pred)}")
+#     distances = tf.sqrt(tf.reduce_sum(tf.square(y_pred_expanded - y_true_expanded), axis=-1))  # Shape: [batch_size, num_classes]
+
+#     nearest_indices = tf.argmin(distances, axis=1)  # Shape: [batch_size]
+
+#     nearest_coords = tf.gather(ground_truth_coords, nearest_indices)  # Shape: [batch_size, 3]
+
+#     correct_predictions = tf.reduce_all(tf.equal(nearest_coords, y_true), axis=-1)  # Shape: [batch_size]
+
+#     return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
+
+def regression_accuracy(y_true, y_pred, ground_truth_coords, tolerance=1e-3):
+
+    # Ensure ground_truth_coords is a tensor
+    ground_truth_coords = tf.convert_to_tensor(ground_truth_coords, dtype=tf.float32)
+    # Reshape y_true and y_pred
     y_true = tf.reshape(y_true, [-1, 3])
     y_pred = tf.reshape(y_pred, [-1, 3])
-    y_pred_expanded = tf.expand_dims(y_pred, axis=1)  # Shape: [batch_size, 1, 3]
-    y_true_expanded = tf.expand_dims(y_true, axis=1)  # Shape: [batch_size, 1, 3]
 
-    distances = tf.sqrt(tf.reduce_sum(tf.square(y_pred_expanded - y_true_expanded), axis=-1))  # Shape: [batch_size, num_classes]
+    # Expand dimensions for broadcasting
+    y_pred_expanded = tf.expand_dims(y_pred, axis=1)  # Shape: [1, 3]
+    y_true_expanded = tf.expand_dims(y_true, axis=1)  # Shape: [1, 3]
+    ground_truth_coords_expanded = tf.expand_dims(ground_truth_coords, axis=0)  # Shape: [1, num_coords, 3]
 
+    print(f"y_pred_expanded.shape: {y_pred_expanded.shape}")
+    print(f"y_true_expanded.shape: {y_true_expanded.shape}")
+    print(f"ground_truth_coords_expanded.shape: {ground_truth_coords_expanded.shape}")
+
+    # Compute pairwise Euclidean distances
+    distances = tf.sqrt(tf.reduce_sum(tf.square(y_pred_expanded - ground_truth_coords_expanded), axis=-1))  # Shape: [batch_size, num_coords]
+
+    # Find the index of the nearest ground truth coordinate
     nearest_indices = tf.argmin(distances, axis=1)  # Shape: [batch_size]
 
+    # Get the nearest ground truth coordinate
     nearest_coords = tf.gather(ground_truth_coords, nearest_indices)  # Shape: [batch_size, 3]
 
+    # Compute distance between nearest_coords and y_true
+    # errors = tf.sqrt(tf.reduce_sum(tf.square(nearest_coords - y_true), axis=-1))  # Shape: [batch_size]
+
+    # # Check if the error is within the tolerance
+    # correct_predictions = errors <= tolerance  # Shape: [batch_size]
     correct_predictions = tf.reduce_all(tf.equal(nearest_coords, y_true), axis=-1)  # Shape: [batch_size]
 
+    # Calculate accuracy as the mean of correct predictions
     return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
 
 
