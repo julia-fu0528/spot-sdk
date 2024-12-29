@@ -22,7 +22,7 @@ from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_c
 from visualize_robot_state import find_closest_vertices, add_red_dots, compute_forward_kinematics, prepare_trimesh_fk, \
 convert_trimesh_to_open3d, create_red_markers, visualize_robot_with_markers, combine_meshes_o3d
 
-
+sys.exit()
 def collect_data(output_path, hostname, command, duration=10):
     sdk = bosdyn.client.create_standard_sdk('RobotStateClient')
     robot = sdk.create_robot(hostname)
