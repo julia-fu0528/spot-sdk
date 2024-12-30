@@ -13,11 +13,12 @@
             "console": "integratedTerminal",
             "args": [
                 "--session", "gouger1209",
-                "--data_dir", "${fileDirname}/data",
-                "--markers_path", "${fileDirname}/data/gouger_markers_pos.txt",
-                "--classify"
+                "--data_dir","data",
+                "--markers_path", "data/gouger_markers_pos.txt",
+                // "--classify"  
             ],
-            "python": "${fileDirname}/my_spot_env/bin/python"
+            "python": "my_spot_env/bin/python",
+            "cwd": "${fileDirname}"
         }
     ]
 }
