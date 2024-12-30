@@ -16,27 +16,27 @@ class JointNetwork(nn.Module):
         if classify:
             self.network = nn.Sequential(
                 nn.Flatten(),
-                nn.Linear(input_dim, 128),
+                nn.Linear(input_dim, 64),
                 nn.ReLU(),
-                nn.Linear(128, 256),
+                nn.Linear(64, 64),
                 nn.ReLU(),
-                nn.Linear(256, 512),
-                nn.ReLU(),
-                nn.Linear(512, output_dim),
+                # nn.Linear(256, 512),
+                # nn.ReLU(),
+                nn.Linear(64, output_dim),
                 nn.Softmax(dim=1)
             )
         else:
             self.network = nn.Sequential(
                 nn.Flatten(),
-                nn.Linear(input_dim, 128),
+                nn.Linear(input_dim, 64),
                 nn.ReLU(),
-                nn.Linear(128, 256),
+                nn.Linear(64, 64),
                 nn.ReLU(),
-                nn.Linear(256, 256),
-                nn.ReLU(),
-                nn.Linear(256, 512),
-                nn.ReLU(),
-                nn.Linear(512, output_dim)
+                # nn.Linear(256, 256),
+                # nn.ReLU(),
+                # nn.Linear(256, 512),
+                # nn.ReLU(),
+                nn.Linear(64, output_dim)
             )
     
     def forward(self, x):
@@ -50,11 +50,14 @@ class LitSpot(L.LightningModule):
 
 
         self.classify = classify
-        self.learning_rate = 1e-3
+        self.learning_rate = 2e-3
 
         markers_pos = np.loadtxt(markers_path, delimiter=',')
         self.marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
         self.marker_positions['100'] = np.array([0, 0, 0])
+
+        self.rev_marker_positions = {
+            tuple(np.round(v.astype(np.float32), decimals=4)): k for k, v in self.marker_positions.items()}
 
         self.marker_posarray = np.array(list(self.marker_positions.values()))
     
@@ -65,33 +68,38 @@ class LitSpot(L.LightningModule):
         x, y = batch["joint_data"].float(), batch["contact_label"].float()
         y_hat = self(x) # shape batch_size by 3
 
+        batch_size = y.shape[0]
+
         if self.classify:
             # print(f"y_hat: {y_hat.numpy().shape}")
             # print(f"y: {y.numpy().shape}")
 
             # y_hat_idx = np.argmax(y_hat.detach().numpy(), axis=1)
-            y_hat_idx = torch.argmax(y_hat, dim=1)
+            y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
             # y_idx = np.argmax(y.numpy(), axis=1)
-            y_idx = torch.argmax(y, dim=1) 
+            y_idx = torch.argmax(y, dim=1).cpu()
 
             # y_hat_label = torch.tensor(y_hat_idx).float()
             # y_label = torch.tensor(y_idx).float()
             y_hat_label = y_hat_idx.float()         # Convert to float if needed
             y_label = y_idx.float()
 
-            loss = F.cross_entropy(y_hat, y_idx)
+            loss = F.cross_entropy(y_hat.cpu(), y_idx)
             # print(f"loss requires grad:{loss.requires_grad}")
 
             # sys.exit()
 
             y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
             y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx]) 
-
-            acc = metrics.accuracy_score(y_label, y_hat_label)
+            
+            # acc = np.sum(y_hat_label == y_label) / y_label.shape[0]
+            acc = torch.sum(y_hat_label == y_label).item() / y_label.shape[0]
+            # acc = metrics.accuracy_score(y_label, y_hat_label)
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 
         else:
             loss = F.mse_loss(y_hat, y)
+            # loss = nn.L1Loss()(y_hat, y)
 
             y_hat_pos = y_hat.detach().cpu().numpy()
             y_pos = y.cpu().numpy()
@@ -103,11 +111,23 @@ class LitSpot(L.LightningModule):
                 self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
                 axis=2)
             min_indices = np.argmin(distances, axis=1) 
-            min_coords = self.marker_posarray[min_indices]
+            min_indices = torch.tensor(min_indices, dtype=torch.long)
+            y_label = np.zeros(y_pos.shape[0])
+            for i, pos in enumerate(y_pos):
+                rounded_pos = tuple(np.round(pos, decimals=4))
+                # print(f"Looking up rounded_pos: {rounded_pos}")
+                y_label[i] = int(self.rev_marker_positions.get(rounded_pos))
+            y_label = torch.tensor(y_label, dtype=torch.long)
+            # acc = np.sum(min_indices == y_label) / len(y_label)
+            acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
+
+            # min_coords = self.marker_posarray[min_indices]
             # acc = np.sum(min_coords == y_pos) / len(y_pos)
-            threshold = 1e-5
-            correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
-            acc = np.mean(correct)
+            # threshold = 1e-5
+
+            # threshold = 0.05
+            # correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
+            # acc = np.mean(correct)
 
         self.log("train/train_loss", loss, on_epoch = True, prog_bar=True)
         self.log("train/train_acc", acc, on_epoch = True, prog_bar=True)
@@ -119,6 +139,11 @@ class LitSpot(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch["joint_data"].float(), batch["contact_label"].float()
         y_hat = self(x)
+        # print(f"y_hat: {y_hat}")
+        # print(f"y_hat shape: {y_hat.shape}")
+        # sys.exit()
+
+        batch_size = y.shape[0]
 
         if self.classify:
             # y_hat_idx = np.argmax(y_hat.detach().numpy(), axis=1)
@@ -126,24 +151,31 @@ class LitSpot(L.LightningModule):
 
             # y_hat_label = torch.tensor(y_hat_idx).float()
             # y_label = torch.tensor(y_idx).float()
-            y_hat_idx = torch.argmax(y_hat, dim=1)  
-            y_idx = torch.argmax(y, dim=1)          
+            y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
+            y_idx = torch.argmax(y, dim=1).cpu()
 
             y_hat_label = y_hat_idx.float()         
             y_label = y_idx.float()
 
-            loss = F.cross_entropy(y_hat, y_idx)
+            loss = F.cross_entropy(y_hat.cpu(), y_idx)
 
             # y_hat_pos = np.array([self.marker_positions.get(str(i)) for i in y_hat_idx])
             # y_pos = np.array([self.marker_positions.get(str(i)) for i in y_idx])
             y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
             y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx])
-
-            acc = metrics.accuracy_score(y_label, y_hat_label)
+            # print(f"y_hat_label: {type(y_hat_label[0].item())}")
+            # print(f"y_label: {type(y_label[0].item())}")
+            # print(f"y_hat shape: {y_hat_label.shape}")
+            # print(f"y shape: {y_label.shape}")
+            # print(f"y_hat_pos shape: {y_label.shape[0]}")
+            # sys.exit()
+            acc = torch.sum(y_hat_label == y_label).item() / y_label.shape[0]
+            # acc = metrics.accuracy_score(y_label, y_hat_label)
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 
         else:
             loss = F.mse_loss(y_hat, y)
+            # loss = nn.L1Loss()(y_hat, y)
 
             y_hat_pos = y_hat.detach().cpu().numpy()
             y_pos = y.cpu().numpy()
@@ -155,11 +187,27 @@ class LitSpot(L.LightningModule):
                 self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
                 axis=2)
             min_indices = np.argmin(distances, axis=1) 
-            min_coords = self.marker_posarray[min_indices]
+            min_indices = torch.tensor(min_indices, dtype=torch.long)
+            y_label = np.zeros(y_pos.shape[0])
+            for i, pos in enumerate(y_pos):
+                rounded_pos = tuple(np.round(pos, decimals=4))
+                y_label[i] = int(self.rev_marker_positions.get(rounded_pos))
+            y_label = torch.tensor(y_label, dtype=torch.long)
+            # print(f"min_indices: {min_indices}")
+            # print(f"y_label: {y_label}")
+            # print(f"min_indices shape: {min_indices.shape}")
+            # print(f"y_label shape: {y_label.shape}")
+            # sys.exit()
+            # y_label = np.array([int(self.rev_marker_positions.get(tuple(pos))) for pos in y_pos])
+            # acc = np.sum(min_indices == y_label) / len(y_label)
+            acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
+
+            # min_coords = self.marker_posarray[min_indices]
             # acc = np.sum(min_coords == y_pos) / len(y_pos)
-            threshold = 1e-5
-            correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
-            acc = np.mean(correct)
+            # threshold = 1e-5
+            # threshold = 0.05
+            # correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
+            # acc = np.mean(correct)
 
         self.log("val/val_loss", loss, on_epoch = True, prog_bar=True)
         self.log("val/val_acc", acc, on_epoch = True, prog_bar=True)

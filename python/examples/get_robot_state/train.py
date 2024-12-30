@@ -1,5 +1,7 @@
 import argparse
 import os
+import sys
+import numpy as np
 from natsort import natsorted
 from pathlib import Path
 from lightning.pytorch import Trainer, seed_everything
@@ -28,7 +30,9 @@ def main(num_classes, markers_path, classify = False):
     early_stop_callback = EarlyStopping(monitor="val/val_acc", patience=100, mode="max")
 
     trainer = Trainer(
-        accelerator="gpu", max_epochs=40,
+        # accelerator="gpu",
+        accelerator="cpu",
+        max_epochs=20,
         logger=[tb_logger],
         callbacks=[checkpoint_callback, early_stop_callback]
     )
@@ -62,6 +66,16 @@ if __name__ == "__main__":
     # get all the file names
     classes = [f.split('.')[0] for f in torque_files]
     num_classes = len(classes)
+
+    # markers_pos = np.loadtxt(markers_path, delimiter=",")
+    # marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
+
+    # calculate the euclidean distance between the 10th and 11th marker
+    # marker_10 = marker_positions.get('58')
+    # marker_11 = marker_positions.get('61')
+    # euclidean_distance = np.linalg.norm(marker_10 - marker_11)
+    # print(f"Euclidean distance between marker 10 and 11: {euclidean_distance}")
+    # sys.exit()
 
     main(num_classes, markers_path, classify)
     
