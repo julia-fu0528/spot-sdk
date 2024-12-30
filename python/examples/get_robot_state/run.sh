@@ -3,12 +3,17 @@
 #                             --output_dir data/gouger1209/stand_h5 \
 #                             --markers_path data/gouger_markers_pos.txt\
 
-echo "################# DATALOADER ###############################"
-python dataset.py --session gouger1209 --data_dir data \
-                    --markers_path data/gouger_markers_pos.txt \
+# echo "################# DATALOADER ###############################"
+# python dataset.py --session gouger1209 --data_dir data \
+#                     --markers_path data/gouger_markers_pos.txt --classify \
+
+echo "################# TRAINING ###############################"
+python train.py --session gouger1209 --data_dir data \
+                --markers_path data/gouger_markers_pos.txt \
+
 
 # echo "################# TRAINING ###############################"
-# python train_torch.py --session gouger1209 --data_dir data \
+# python train_tf.py --session gouger1209 --data_dir data \
 #                 --model_dir model_torch --log_dir logs_torch --plots_dir plots_torch \
 #                 --markers_path data/gouger_markers_pos.txt \
 
@@ -22,6 +27,9 @@ python dataset.py --session gouger1209 --data_dir data \
 # pip install urdfpy
 # pip install lightning
 # pip install open3d
+# pip install seaborn
+# pip install -U 'tensorboard'
+
 
 
 
