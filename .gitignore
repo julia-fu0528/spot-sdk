@@ -6,3 +6,8 @@ python/examples/get_robot_state/log/*
 python/examples/get_robot_state/model/*
 python/examples/get_robot_state/vis/*
 python/examples/get_robot_state/data/*
+python/examples/get_robot_state/preprocessed_data/*
+python/examples/get_robot_state/gouger_logs/*
+python/examples/get_robot_state/classify/*
+python/examples/get_robot_state/classification/*
+python/examples/get_robot_state/regression/*
