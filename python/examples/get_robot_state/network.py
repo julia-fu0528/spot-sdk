@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score, confusion_matrix
 
 class JointNetwork(nn.Module):
-    def __init__(self, input_dim: int, output_dim: int, classify=False) -> None:
+    def __init__(self, input_dim: int, output_dim: int, classify) -> None:
         super().__init__()
         if classify:
             self.network = nn.Sequential(
@@ -39,11 +39,10 @@ class JointNetwork(nn.Module):
         return self.network(x)
 
 class LitSpot(L.LightningModule):
-    def __init__(self, input_dim: int, output_dim: int, markers_path, classify=False) -> None:
+    def __init__(self, input_dim: int, output_dim: int, markers_path, classify) -> None:
         super().__init__()
-
         self.model = JointNetwork(input_dim, output_dim, classify)
-
+        
 
         self.classify = classify
         self.learning_rate = 2e-3
@@ -66,16 +65,16 @@ class LitSpot(L.LightningModule):
 
         threshold = 0.1
         if self.classify:
-            y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
-            y_idx = torch.argmax(y, dim=1).cpu()
-            # y_hat_idx = torch.argmax(y_hat, dim=1)
-            # y_idx = torch.argmax(y, dim=1)
+            # y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
+            # y_idx = torch.argmax(y, dim=1).cpu()
+            y_hat_idx = torch.argmax(y_hat, dim=1)
+            y_idx = torch.argmax(y, dim=1)
 
             y_hat_label = y_hat_idx.float()         # Convert to float if needed
             y_label = y_idx.float()
 
-            loss = F.cross_entropy(y_hat.cpu(), y_idx)
-            # loss = F.cross_entropy(y_hat, y_idx)
+            # loss = F.cross_entropy(y_hat.cpu(), y_idx)
+            loss = F.cross_entropy(y_hat, y_idx)
 
 
             y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
@@ -90,10 +89,10 @@ class LitSpot(L.LightningModule):
         else:
             loss = F.mse_loss(y_hat, y)
 
-            y_hat_pos = y_hat.detach().cpu().numpy()
-            y_pos = y.cpu().numpy()
-            # y_hat_pos = y_hat.detach().numpy()
-            # y_pos = y.numpy()
+            # y_hat_pos = y_hat.detach().cpu().numpy()
+            # y_pos = y.cpu().numpy()
+            y_hat_pos = y_hat.detach().numpy()
+            y_pos = y.numpy()
 
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 
@@ -133,18 +132,17 @@ class LitSpot(L.LightningModule):
         y_hat = self(x)
 
         threshold = 0.1
-
         if self.classify:
-            y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
-            y_idx = torch.argmax(y, dim=1).cpu()
-            # y_hat_idx = torch.argmax(y_hat, dim=1)
-            # y_idx = torch.argmax(y, dim=1)
+            # y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
+            # y_idx = torch.argmax(y, dim=1).cpu()
+            y_hat_idx = torch.argmax(y_hat, dim=1)
+            y_idx = torch.argmax(y, dim=1)
 
             y_hat_label = y_hat_idx.float()         
             y_label = y_idx.float()
 
-            loss = F.cross_entropy(y_hat.cpu(), y_idx)
-            # loss = F.cross_entropy(y_hat, y_idx)
+            # loss = F.cross_entropy(y_hat.cpu(), y_idx)
+            loss = F.cross_entropy(y_hat, y_idx)
 
             y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
             y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx])
@@ -158,10 +156,10 @@ class LitSpot(L.LightningModule):
         else:
             loss = F.mse_loss(y_hat, y)
 
-            y_hat_pos = y_hat.detach().cpu().numpy()
-            y_pos = y.cpu().numpy()
-            # y_hat_pos = y_hat.detach().numpy()
-            # y_pos = y.numpy()
+            # y_hat_pos = y_hat.detach().cpu().numpy()
+            # y_pos = y.cpu().numpy()
+            y_hat_pos = y_hat.detach().numpy()
+            y_pos = y.numpy()
 
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 

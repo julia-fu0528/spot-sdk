@@ -11,7 +11,7 @@ from network import LitSpot
 from dataset import SpotDataModule
 
 
-def main(num_classes, markers_path, classify = False):
+def main(num_classes, markers_path, classify):
     seed_everything(42)
 
     if classify:
@@ -19,19 +19,20 @@ def main(num_classes, markers_path, classify = False):
     else:
         tb_logger = TensorBoardLogger("gouger_logs", name="regression")
 
-    data_module = SpotDataModule(batch_size=256)
+    data_module = SpotDataModule(classify, batch_size=256)
     if classify:
         output_dim = num_classes
     else:
         output_dim = 3
     model = LitSpot(input_dim = 24, output_dim = output_dim, markers_path = markers_path, classify=classify)
 
+
     checkpoint_callback = ModelCheckpoint(monitor="val/val_acc", mode="max", save_last=True, filename="best")
     early_stop_callback = EarlyStopping(monitor="val/val_acc", patience=100, mode="max")
 
     trainer = Trainer(
-        accelerator="gpu",
-        # accelerator="cpu",
+        # accelerator="gpu",
+        accelerator="cpu",
         max_epochs=20,
         logger=[tb_logger],
         callbacks=[checkpoint_callback, early_stop_callback]
@@ -52,7 +53,6 @@ if __name__ == "__main__":
     options = parser.parse_args()
 
     classify = options.classify
-    print(f"Classify: {classify}")
     session = options.session
     data_dir = options.data_dir
     markers_path = options.markers_path

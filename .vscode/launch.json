@@ -15,7 +15,7 @@
                 "--session", "gouger1209",
                 "--data_dir","data",
                 "--markers_path", "data/gouger_markers_pos.txt",
-                // "--classify"  
+                "--classify"  
             ],
             "python": "my_spot_env/bin/python",
             "cwd": "${fileDirname}"

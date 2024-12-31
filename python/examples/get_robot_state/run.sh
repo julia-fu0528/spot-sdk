@@ -7,9 +7,9 @@
 # python dataset.py --session gouger1209 --data_dir data \
 #                     --markers_path data/gouger_markers_pos.txt --classify \
 
-echo "################# TRAINING ###############################"
-python train.py --session gouger1209 --data_dir data \
-                --markers_path data/gouger_markers_pos.txt --classify \
+# echo "################# TRAINING ###############################"
+# python train.py --session gouger1209 --data_dir data \
+#                 --markers_path data/gouger_markers_pos.txt --classify \
 
 
 # echo "################# TRAINING ###############################"
@@ -17,9 +17,9 @@ python train.py --session gouger1209 --data_dir data \
 #                 --model_dir model_torch --log_dir logs_torch --plots_dir plots_torch \
 #                 --markers_path data/gouger_markers_pos.txt \
 
-# echo "################# PREDICTING ################################"
-# python predict.py 138.16.161.21 --ckpts_path gouger_logs/classification/version_38/checkpoints/last.ckpt\
-#                   --markers_path data/gouger_markers_pos.txt --data_dir data/gouger1209 --classify \
+echo "################# PREDICTING ################################"
+python predict.py 138.16.161.21 --ckpts_path gouger_logs/classification/version_62/checkpoints/last.ckpt\
+                  --markers_path data/gouger_markers_pos.txt --data_dir data/gouger1209 --classify \
 
 
 # pip3 install torch torchvision torchaudio

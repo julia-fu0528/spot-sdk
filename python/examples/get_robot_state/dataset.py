@@ -23,7 +23,7 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 from visualize_robot_state import load_joint_torques, load_joint_positions
 
 class JointLabel:
-    def __init__(self, torque_dir, markers_path, classify=False) -> None:
+    def __init__(self, torque_dir, markers_path, classify) -> None:
         self.torque_dir = torque_dir
         self.training_data = []
         self.training_labels = []
@@ -81,7 +81,7 @@ class JointLabel:
         print(f"Finished data preprocessing")
     
     def load_data(self, dir, mode='train'):
-        print(f"Loading data from {dir}...")
+        print(f"Loading data from {dir} for {mode}...")
         for i, torque_file in enumerate(natsorted(os.listdir(dir))):
             if torque_file.endswith(".npy"):
                 torque_path = os.path.join(dir, torque_file)
@@ -101,7 +101,7 @@ class JointLabel:
                         else:
                             self.validation_data.append(joint_data)
                     if self.classify:
-                        label = F.one_hot(torch.tensor(label), num_classes=self.num_classes)
+                        label = F.one_hot(torch.tensor(label), num_classes=self.num_classes).numpy()
                     for i in range(len(normalized_data)):
                         if mode == 'train':
                             self.training_labels.append(label)
@@ -110,13 +110,12 @@ class JointLabel:
         print(f"Finished loading data from {dir}")
 
 class SpotDataset(Dataset):
-    def __init__(self, dataset_mode = 'regression', mode='train') -> None:
+    def __init__(self, dataset_mode, mode='train') -> None:
         super().__init__()
         self.mode = mode
         self.dataset_mode = dataset_mode
-        self.joint_data = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_joint_data.npy")
-        self.contact_labels = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_contact_labels.npy")
-
+        self.joint_data = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_joint_data.npy", allow_pickle=True)
+        self.contact_labels = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_contact_labels.npy", allow_pickle=True)
 
         assert len(self.joint_data) == len(self.contact_labels), "Length of joint data and contact labels should be the same"
     
@@ -125,7 +124,7 @@ class SpotDataset(Dataset):
     
     def __getitem__(self, idx):
         joint_data = self.joint_data[idx]
-        contact_label = self.contact_labels[idx]    
+        contact_label = self.contact_labels[idx]   
 
         return {
             "joint_data": joint_data,
@@ -133,13 +132,18 @@ class SpotDataset(Dataset):
         }
 
 class SpotDataModule(L.LightningDataModule):
-    def __init__(self, batch_size=32) -> None:
+    def __init__(self, classify, batch_size=32) -> None:
         super().__init__()
         self.batch_size = batch_size
+        self.classify = classify
 
     def setup(self, stage=None):
-        self.train_set = SpotDataset(mode='train')
-        self.val_set = SpotDataset(mode='val')
+        if self.classify:
+            self.train_set = SpotDataset(dataset_mode="classify", mode='train')
+            self.val_set = SpotDataset(dataset_mode="classify", mode='val')
+        else:
+            self.train_set = SpotDataset(dataset_mode="regression", mode='train')
+            self.val_set = SpotDataset(dataset_mode="regression", mode='val')
     
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True,
@@ -183,10 +187,16 @@ if __name__ == "__main__":
         dataset_mode = "regression"
     save_dir = os.path.join("preprocessed_data", dataset_mode)
     os.makedirs(save_dir, exist_ok=True)
+    if classify:
+        training_labels = np.stack(joint_label.training_labels)  # Stack instead of simple array conversion
+        validation_labels = np.stack(joint_label.validation_labels)
+    else:
+        training_labels = np.array(joint_label.training_labels)
+        validation_labels = np.array(joint_label.validation_labels)
     np.save(os.path.join(save_dir,"train_joint_data.npy"), joint_label.training_data)
-    np.save(os.path.join(save_dir,"train_contact_labels.npy"), joint_label.training_labels)
+    np.save(os.path.join(save_dir,"train_contact_labels.npy"), training_labels)
     np.save(os.path.join(save_dir,"val_joint_data.npy"), joint_label.validation_data)
-    np.save(os.path.join(save_dir,"val_contact_labels.npy"), joint_label.validation_labels)
+    np.save(os.path.join(save_dir,"val_contact_labels.npy"), validation_labels)
     print(f"Training and validation data saved to {save_dir}")
 
     train_dataset = SpotDataset(dataset_mode, mode='train')
