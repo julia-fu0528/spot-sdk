@@ -11,3 +11,4 @@ python/examples/get_robot_state/gouger_logs/*
 python/examples/get_robot_state/classify/*
 python/examples/get_robot_state/classification/*
 python/examples/get_robot_state/regression/*
+python/examples/gouger_logs/*
