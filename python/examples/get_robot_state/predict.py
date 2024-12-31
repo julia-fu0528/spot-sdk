@@ -279,7 +279,9 @@ def main():
 
             # Real time prediction
             buffer = np.roll(buffer, 1, axis=0) 
-            buffer[0] = model.predict(processed_data)
+            processed_data_tensor = torch.tensor(processed_data, dtype=torch.float32).to(model.device)
+            with torch.no_grad():
+                buffer[0] = model.predict(processed_data_tensor).cpu().numpy()
             predictions = np.dot(weights, buffer)
             if classify:
                     predictions = predictions.reshape(-1, 101)
