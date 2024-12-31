@@ -64,96 +64,36 @@ class LitSpot(L.LightningModule):
         x, y = batch["joint_data"].float(), batch["contact_label"].float()
         y_hat = self(x) # shape batch_size by 3
 
+        threshold = 0.05
         if self.classify:
-            # y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
-            # y_idx = torch.argmax(y, dim=1).cpu()
-            y_hat_idx = torch.argmax(y_hat, dim=1)
-            y_idx = torch.argmax(y, dim=1)
+            y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
+            y_idx = torch.argmax(y, dim=1).cpu()
+            # y_hat_idx = torch.argmax(y_hat, dim=1)
+            # y_idx = torch.argmax(y, dim=1)
 
             y_hat_label = y_hat_idx.float()         # Convert to float if needed
             y_label = y_idx.float()
 
-            # loss = F.cross_entropy(y_hat.cpu(), y_idx)
-            loss = F.cross_entropy(y_hat, y_idx)
+            loss = F.cross_entropy(y_hat.cpu(), y_idx)
+            # loss = F.cross_entropy(y_hat, y_idx)
 
 
             y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
             y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx]) 
             
-            acc = torch.sum(y_hat_label == y_label).item() / y_label.shape[0]
+            # acc = torch.sum(y_hat_label == y_label).item() / y_label.shape[0]
             # acc = metrics.accuracy_score(y_label, y_hat_label)
+            correct = np.linalg.norm(y_pos - y_hat_pos, axis=1) < threshold
+            acc = np.mean(correct)
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 
         else:
             loss = F.mse_loss(y_hat, y)
 
-            # y_hat_pos = y_hat.detach().cpu().numpy()
-            # y_pos = y.cpu().numpy()
-            y_hat_pos = y_hat.detach().numpy()
-            y_pos = y.numpy()
-
-            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
-
-            # calculate the distance from y_hat_pos to all the marker positions
-            distances = np.linalg.norm(
-                self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
-                axis=2)
-
-
-            min_indices = np.argmin(distances, axis=1) 
-            min_indices = torch.tensor(min_indices, dtype=torch.long)
-            y_label = np.zeros(y_pos.shape[0])
-            for i, pos in enumerate(y_pos):
-                rounded_pos = tuple(np.round(pos, decimals=4))
-                y_label[i] = int(self.rev_marker_positions.get(rounded_pos))
-            y_label = torch.tensor(y_label, dtype=torch.long)
-            # acc = np.sum(min_indices == y_label) / len(y_label)
-            acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
-
-            # min_coords = self.marker_posarray[min_indices]
-            # acc = np.sum(min_coords == y_pos) / len(y_pos)
-            # threshold = 1e-5
-
-            # threshold = 0.05
-            # correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
-            # acc = np.mean(correct)
-
-        self.log("train/train_loss", loss, on_epoch = True, prog_bar=True)
-        self.log("train/train_acc", acc, on_epoch = True, prog_bar=True)
-        self.log("train/train_dist", euclidean_distance.mean(), on_epoch = True, prog_bar=True)
-
-        return loss
-    
-    def validation_step(self, batch, batch_idx):
-        x, y = batch["joint_data"].float(), batch["contact_label"].float()
-        y_hat = self(x)
-
-
-        if self.classify:
-            # y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
-            # y_idx = torch.argmax(y, dim=1).cpu()
-            y_hat_idx = torch.argmax(y_hat, dim=1)
-            y_idx = torch.argmax(y, dim=1)
-
-            y_hat_label = y_hat_idx.float()         
-            y_label = y_idx.float()
-
-            # loss = F.cross_entropy(y_hat.cpu(), y_idx)
-            loss = F.cross_entropy(y_hat, y_idx)
-
-            y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
-            y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx])
-            acc = torch.sum(y_hat_label == y_label).item() / y_label.shape[0]
-            # acc = metrics.accuracy_score(y_label, y_hat_label)
-            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
-
-        else:
-            loss = F.mse_loss(y_hat, y)
-
-            # y_hat_pos = y_hat.detach().cpu().numpy()
-            # y_pos = y.cpu().numpy()
-            y_hat_pos = y_hat.detach().numpy()
-            y_pos = y.numpy()
+            y_hat_pos = y_hat.detach().cpu().numpy()
+            y_pos = y.cpu().numpy()
+            # y_hat_pos = y_hat.detach().numpy()
+            # y_pos = y.numpy()
 
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 
@@ -173,14 +113,80 @@ class LitSpot(L.LightningModule):
                 appended = int(self.rev_marker_positions.get(rounded_pos))
             y_label = torch.tensor(y_label, dtype=torch.long)
             # calculate accuracy based on whether classes are the same
-            acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
+            # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
 
-            # min_coords = self.marker_posarray[min_indices]
+            min_coords = self.marker_posarray[min_indices]
             # acc = np.sum(min_coords == y_pos) / len(y_pos)
             # threshold = 1e-5
-            # threshold = 0.05
-            # correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
-            # acc = np.mean(correct)
+            correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
+            acc = np.mean(correct)
+
+        self.log("train/train_loss", loss, on_epoch = True, prog_bar=True)
+        self.log("train/train_acc", acc, on_epoch = True, prog_bar=True)
+        self.log("train/train_dist", euclidean_distance.mean(), on_epoch = True, prog_bar=True)
+
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        x, y = batch["joint_data"].float(), batch["contact_label"].float()
+        y_hat = self(x)
+
+        threshold = 0.05
+
+        if self.classify:
+            y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
+            y_idx = torch.argmax(y, dim=1).cpu()
+            # y_hat_idx = torch.argmax(y_hat, dim=1)
+            # y_idx = torch.argmax(y, dim=1)
+
+            y_hat_label = y_hat_idx.float()         
+            y_label = y_idx.float()
+
+            loss = F.cross_entropy(y_hat.cpu(), y_idx)
+            # loss = F.cross_entropy(y_hat, y_idx)
+
+            y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
+            y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx])
+            # acc = torch.sum(y_hat_label == y_label).item() / y_label.shape[0]
+            # acc = metrics.accuracy_score(y_label, y_hat_label)
+            correct = np.linalg.norm(y_pos - y_hat_pos, axis=1) < threshold
+            acc = np.mean(correct)
+
+            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
+
+        else:
+            loss = F.mse_loss(y_hat, y)
+
+            y_hat_pos = y_hat.detach().cpu().numpy()
+            y_pos = y.cpu().numpy()
+            # y_hat_pos = y_hat.detach().numpy()
+            # y_pos = y.numpy()
+
+            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
+
+            # calculate the distance from y_hat_pos to all the marker positions
+            distances = np.linalg.norm(
+                self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
+                axis=2)
+            # get closest marker index
+            min_indices = np.argmin(distances, axis=1) 
+            min_indices = torch.tensor(min_indices, dtype=torch.long)
+            # get closest class indices
+            y_label = []
+            for i, pos in enumerate(y_pos):
+                rounded_pos = tuple(np.round(pos, decimals=4))
+                # get class index from coord using reverse mapping
+                y_label.append(int(self.rev_marker_positions.get(rounded_pos)))
+                appended = int(self.rev_marker_positions.get(rounded_pos))
+            y_label = torch.tensor(y_label, dtype=torch.long)
+            # calculate accuracy based on whether classes are the same
+            # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
+
+            min_coords = self.marker_posarray[min_indices]
+            # acc = np.sum(min_coords == y_pos) / len(y_pos)
+            # threshold = 1e-5
+            correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
+            acc = np.mean(correct)
 
         self.log("val/val_loss", loss, on_epoch = True, prog_bar=True)
         self.log("val/val_acc", acc, on_epoch = True, prog_bar=True)
@@ -199,3 +205,8 @@ class LitSpot(L.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
+    
+    def predict(self, inputs):
+        self.eval()  # Ensure the model is in evaluation mode
+        with torch.no_grad():
+            return self(inputs)

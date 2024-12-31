@@ -2,6 +2,7 @@ import os
 import time
 import sys
 import numpy as np
+import torch
 import open3d as o3d
 from pathlib import Path
 from collections import Counter
@@ -9,12 +10,14 @@ from scipy.spatial import cKDTree
 from natsort import natsorted
 from urdfpy import URDF
 import matplotlib.pyplot as plt
-import tensorflow as tf
-from tensorflow.keras.models import load_model
+# import tensorflow as tf
+# from tensorflow.keras.models import load_model
 from src.utils.visualizer import SpotVisualizer
 from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 from visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
+
+from network import LitSpot
 
 def collect_realtime_data(robot_state_client, duration=2):
     """
@@ -102,18 +105,31 @@ def visualize_prediction(marker_positions, predicted_class, robot_meshes):
     visualize_with_camera(geometries, camera_params)
 
 
-@tf.keras.utils.register_keras_serializable()
-def euclidean_distance(y_true, y_pred):
-    return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1)))
+# @tf.keras.utils.register_keras_serializable()
+# def euclidean_distance(y_true, y_pred):
+#     return tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1)))
 
-@tf.keras.utils.register_keras_serializable()
-def regression_accuracy(y_true, y_pred, tolerance=0.1):
-    # Calculate the Euclidean distance between true and predicted coordinates
-    distance = tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1))
-    # Check if the distance is within the tolerance
-    correct_predictions = tf.cast(distance <= tolerance, tf.float32)
-    # Return the mean accuracy
-    return tf.reduce_mean(correct_predictions)
+# @tf.keras.utils.register_keras_serializable()
+# def regression_accuracy(y_true, y_pred, tolerance=0.1):
+#     # Calculate the Euclidean distance between true and predicted coordinates
+#     distance = tf.sqrt(tf.reduce_sum(tf.square(y_true - y_pred), axis=-1))
+#     # Check if the distance is within the tolerance
+#     correct_predictions = tf.cast(distance <= tolerance, tf.float32)
+#     # Return the mean accuracy
+#     return tf.reduce_mean(correct_predictions)
+
+
+def load_from_checkpoint(checkpoint_path, input_dim, output_dim, markers_path, classify=False, device="cuda"):
+    """
+    Load a model from a checkpoint file.
+    """
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device(device))
+    model = LitSpot(input_dim=input_dim, output_dim=output_dim, markers_path=markers_path, classify=classify)
+    model.load_state_dict(checkpoint['state_dict'])
+    model.to(device)
+    model.eval()
+    return model
+
 
 
 def main():
@@ -124,14 +140,26 @@ def main():
 
     parser = argparse.ArgumentParser()
     bosdyn.client.util.add_base_arguments(parser)
-    parser.add_argument('--model_path', required=True, help='Path to the trained model')
+    parser.add_argument('--ckpts_path', required=True, help='Path to the trained model')
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--data_dir', required=True, help='Path to the directory containing torque data')
+    parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
+
     options = parser.parse_args()
+    classify = options.classify
+
+     # Load marker positions
+    markers_path = options.markers_path
+    markers_pos = np.loadtxt(markers_path, delimiter=",")
 
      # Load the trained model
     print("Loading the model...")
-    model = load_model(options.model_path)
+    # model = load_model(options.model_path)
+    if classify:
+        output_dim = 101
+    else:
+        output_dim = 3
+    model = load_from_checkpoint(options.ckpts_path, input_dim=24, output_dim=output_dim, markers_path=markers_path, classify=classify)
     print("Model loaded successfully.")
 
     # Initialize robot and client
@@ -140,9 +168,6 @@ def main():
     bosdyn.client.util.authenticate(robot)
     robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
 
-     # Load marker positions
-    markers_path = options.markers_path
-    markers_pos = np.loadtxt(markers_path, delimiter=",")
     # markers_pos = [
     #     # front
     #     [0.45, 0.06, -0.035],
@@ -199,7 +224,7 @@ def main():
     print(f"class: {classes}")
     for c in classes:
         if marker_positions.get(c) is None:
-            coordinates['100'] = np.array([0, 0, 1000])
+            coordinates['100'] = np.array([0, 0, 0])
             # coordinates.append(np.array([0, 0, 0]))
         else:
             # coordinates.append(marker_positions.get(c))
@@ -214,12 +239,15 @@ def main():
     alpha = 0.2
     sliding_win = 15
     # sliding_win = 5
-    # buffer = np.zeros((sliding_win, 101))
-    buffer = np.zeros((sliding_win, 3))
+    if classify:
+        buffer = np.zeros((sliding_win, 101))
+    else:
+        buffer = np.zeros((sliding_win, 3))
     weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
     # normalize - in the regression case, weighted average
-    weights = weights / np.sum(weights)
+    if not classify:
+        weights = weights / np.sum(weights)
 
     original_colors = [np.asarray(pcd.colors).copy() for pcd in visualizer.point_clouds]
     # original_vertex_colors = np.asarray(total_mesh.vertex_colors).copy()
@@ -252,20 +280,28 @@ def main():
             # Real time prediction
             buffer = np.roll(buffer, 1, axis=0) 
             buffer[0] = model.predict(processed_data)
-            # predictions = np.dot(weights, buffer).reshape(-1, 101)
             predictions = np.dot(weights, buffer)
-            # predictions = np.mean(buffer, axis = 0)
-            print(f"prediction:{buffer[0]}")
+            if classify:
+                    predictions = predictions.reshape(-1, 101)
+                    predicted_class_index = np.argmax(predictions)
+                    confidence = np.max(predictions)
+                    predicted_class = classes[predicted_class_index]
+                    if predicted_class == "no_contact":
+                        pos = np.array([0, 0, 0])
+                    else:
+                        pos = marker_positions.get(predicted_class)
+            else:
+                pos = predictions
+
+                # Compute the weighted variance
+                weighted_mean = predictions
+                differences = buffer - weighted_mean  # Difference between each row and the mean
+                squared_differences = differences**2
+                weighted_variance = np.dot(weights, np.mean(squared_differences, axis=1))  # Average squared differences
+                confidence = 1 / (1 + np.sqrt(weighted_variance))  # Inverse relation: lower variance → higher confidence
+                print(f"prediction:{buffer[0]}")
             # predicted_class_index = np.argmax(predictions)
-            confidence = np.max(predictions)
 
-
-            # Compute the weighted variance
-            weighted_mean = predictions
-            differences = buffer - weighted_mean  # Difference between each row and the mean
-            squared_differences = differences**2
-            weighted_variance = np.dot(weights, np.mean(squared_differences, axis=1))  # Average squared differences
-            confidence = 1 / (1 + np.sqrt(weighted_variance))  # Inverse relation: lower variance → higher confidence
 
 
             # predicted_class = classes[predicted_class_index]
@@ -280,7 +316,7 @@ def main():
             # Visualize the prediction
             # else:
             # pos = marker_positions.get(predicted_class)
-            indices = kdtree.query_ball_point(predictions, radius)
+            indices = kdtree.query_ball_point(pos, radius)
 
             for idx in indices:
                 pcd_idx = np.searchsorted(point_cloud_boundaries, idx, side='right') - 1

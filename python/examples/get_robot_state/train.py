@@ -30,8 +30,8 @@ def main(num_classes, markers_path, classify = False):
     early_stop_callback = EarlyStopping(monitor="val/val_acc", patience=100, mode="max")
 
     trainer = Trainer(
-        # accelerator="gpu",
-        accelerator="cpu",
+        accelerator="gpu",
+        # accelerator="cpu",
         max_epochs=20,
         logger=[tb_logger],
         callbacks=[checkpoint_callback, early_stop_callback]
