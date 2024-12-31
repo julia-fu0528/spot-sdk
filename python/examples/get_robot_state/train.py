@@ -52,6 +52,7 @@ if __name__ == "__main__":
     options = parser.parse_args()
 
     classify = options.classify
+    print(f"Classify: {classify}")
     session = options.session
     data_dir = options.data_dir
     markers_path = options.markers_path

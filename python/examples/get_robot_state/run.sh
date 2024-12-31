@@ -9,7 +9,7 @@
 
 echo "################# TRAINING ###############################"
 python train.py --session gouger1209 --data_dir data \
-                --markers_path data/gouger_markers_pos.txt \
+                --markers_path data/gouger_markers_pos.txt --classify \
 
 
 # echo "################# TRAINING ###############################"
