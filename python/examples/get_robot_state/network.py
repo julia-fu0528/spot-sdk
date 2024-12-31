@@ -64,7 +64,7 @@ class LitSpot(L.LightningModule):
         x, y = batch["joint_data"].float(), batch["contact_label"].float()
         y_hat = self(x) # shape batch_size by 3
 
-        threshold = 0.05
+        threshold = 0.1
         if self.classify:
             y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
             y_idx = torch.argmax(y, dim=1).cpu()
@@ -118,7 +118,8 @@ class LitSpot(L.LightningModule):
             min_coords = self.marker_posarray[min_indices]
             # acc = np.sum(min_coords == y_pos) / len(y_pos)
             # threshold = 1e-5
-            correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
+            correct = np.linalg.norm(y_pos - y_hat_pos, axis=1) < threshold
+            # correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
             acc = np.mean(correct)
 
         self.log("train/train_loss", loss, on_epoch = True, prog_bar=True)
@@ -131,7 +132,7 @@ class LitSpot(L.LightningModule):
         x, y = batch["joint_data"].float(), batch["contact_label"].float()
         y_hat = self(x)
 
-        threshold = 0.05
+        threshold = 0.1
 
         if self.classify:
             y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
