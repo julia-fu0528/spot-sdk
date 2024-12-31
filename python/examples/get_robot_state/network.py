@@ -42,7 +42,7 @@ class LitSpot(L.LightningModule):
     def __init__(self, input_dim: int, output_dim: int, markers_path, classify) -> None:
         super().__init__()
         self.model = JointNetwork(input_dim, output_dim, classify)
-        
+        # self.device = device  
 
         self.classify = classify
         self.learning_rate = 2e-3
@@ -59,23 +59,27 @@ class LitSpot(L.LightningModule):
     def forward(self, x):
         return self.model(x)
 
+    def _get_device(self):
+        return next(self.parameters()).device
+
     def training_step(self, batch, batch_idx):
-        x, y = batch["joint_data"].float(), batch["contact_label"].float()
+        device = self._get_device()
+        x, y = batch["joint_data"].float().to(device), batch["contact_label"].float().to(device)
         y_hat = self(x) # shape batch_size by 3
 
         threshold = 0.1
         if self.classify:
-            # y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
-            # y_idx = torch.argmax(y, dim=1).cpu()
+            # if self.device == "gpu":
+            #     y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
+            #     y_idx = torch.argmax(y, dim=1).cpu()
+            #     loss = F.cross_entropy(y_hat.cpu(), y_idx)
+            # else:
             y_hat_idx = torch.argmax(y_hat, dim=1)
             y_idx = torch.argmax(y, dim=1)
+            loss = F.cross_entropy(y_hat, y_idx)
 
             y_hat_label = y_hat_idx.float()         # Convert to float if needed
             y_label = y_idx.float()
-
-            # loss = F.cross_entropy(y_hat.cpu(), y_idx)
-            loss = F.cross_entropy(y_hat, y_idx)
-
 
             y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
             y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx]) 
@@ -88,11 +92,12 @@ class LitSpot(L.LightningModule):
 
         else:
             loss = F.mse_loss(y_hat, y)
-
-            # y_hat_pos = y_hat.detach().cpu().numpy()
-            # y_pos = y.cpu().numpy()
-            y_hat_pos = y_hat.detach().numpy()
-            y_pos = y.numpy()
+            # if self.device == "gpu":
+            y_hat_pos = y_hat.detach().cpu().numpy()
+            y_pos = y.cpu().numpy()
+            # else:
+            #     y_hat_pos = y_hat.detach().numpy()
+            #     y_pos = y.numpy()
 
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 
@@ -110,7 +115,7 @@ class LitSpot(L.LightningModule):
                 # get class index from coord using reverse mapping
                 y_label.append(int(self.rev_marker_positions.get(rounded_pos)))
                 appended = int(self.rev_marker_positions.get(rounded_pos))
-            y_label = torch.tensor(y_label, dtype=torch.long)
+            y_label = torch.tensor(y_label, dtype=torch.long).to(device)
             # calculate accuracy based on whether classes are the same
             # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
 
@@ -128,21 +133,23 @@ class LitSpot(L.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
-        x, y = batch["joint_data"].float(), batch["contact_label"].float()
+        device = self._get_device()
+        x, y = batch["joint_data"].float().to(device), batch["contact_label"].float().to(device)
         y_hat = self(x)
 
         threshold = 0.1
         if self.classify:
-            # y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
-            # y_idx = torch.argmax(y, dim=1).cpu()
+            # if self.device == "gpu":
+            #     y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
+            #     y_idx = torch.argmax(y, dim=1).cpu()
+            #     loss = F.cross_entropy(y_hat.cpu(), y_idx)
+            # else:
             y_hat_idx = torch.argmax(y_hat, dim=1)
             y_idx = torch.argmax(y, dim=1)
+            loss = F.cross_entropy(y_hat, y_idx)
 
             y_hat_label = y_hat_idx.float()         
             y_label = y_idx.float()
-
-            # loss = F.cross_entropy(y_hat.cpu(), y_idx)
-            loss = F.cross_entropy(y_hat, y_idx)
 
             y_hat_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_hat_idx])
             y_pos = np.array([self.marker_positions.get(str(i.item())) for i in y_idx])
@@ -155,11 +162,12 @@ class LitSpot(L.LightningModule):
 
         else:
             loss = F.mse_loss(y_hat, y)
-
-            # y_hat_pos = y_hat.detach().cpu().numpy()
-            # y_pos = y.cpu().numpy()
-            y_hat_pos = y_hat.detach().numpy()
-            y_pos = y.numpy()
+            # if self.device == "gpu":
+            y_hat_pos = y_hat.detach().cpu().numpy()
+            y_pos = y.cpu().numpy()
+            # else:
+            #     y_hat_pos = y_hat.detach().numpy()
+            #     y_pos = y.numpy()
 
             euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
 
@@ -177,7 +185,7 @@ class LitSpot(L.LightningModule):
                 # get class index from coord using reverse mapping
                 y_label.append(int(self.rev_marker_positions.get(rounded_pos)))
                 appended = int(self.rev_marker_positions.get(rounded_pos))
-            y_label = torch.tensor(y_label, dtype=torch.long)
+            y_label = torch.tensor(y_label, dtype=torch.long).to(device)
             # calculate accuracy based on whether classes are the same
             # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
 

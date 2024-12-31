@@ -18,8 +18,8 @@
 #                 --markers_path data/gouger_markers_pos.txt \
 
 echo "################# PREDICTING ################################"
-python predict.py 138.16.161.21 --ckpts_path gouger_logs/classification/version_62/checkpoints/last.ckpt\
-                  --markers_path data/gouger_markers_pos.txt --data_dir data/gouger1209 --classify \
+python predict.py 138.16.161.21 --ckpts_path gouger_logs/regression/version_130/checkpoints/last.ckpt\
+                  --markers_path data/gouger_markers_pos.txt --data_dir data/gouger1209 --device cpu \
 
 
 # pip3 install torch torchvision torchaudio

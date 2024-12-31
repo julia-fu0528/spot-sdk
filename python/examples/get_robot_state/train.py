@@ -32,7 +32,8 @@ def main(num_classes, markers_path, classify):
 
     trainer = Trainer(
         # accelerator="gpu",
-        accelerator="cpu",
+        accelerator=device,
+        # accelerator="cpu",
         max_epochs=20,
         logger=[tb_logger],
         callbacks=[checkpoint_callback, early_stop_callback]
@@ -48,6 +49,7 @@ if __name__ == "__main__":
     parser.add_argument('--session', type = str, required=True, help='Session for data collection')
     parser.add_argument('--data_dir', required=True, help='Output directory for data')
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
+    parser.add_argument('--device', required=True, help='gpu or cpu')
     parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
 
     options = parser.parse_args()
@@ -56,6 +58,7 @@ if __name__ == "__main__":
     session = options.session
     data_dir = options.data_dir
     markers_path = options.markers_path
+    device = options.device
 
     # current folder path 
     folder_path =  Path(__file__).parent

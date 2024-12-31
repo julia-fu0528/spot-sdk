@@ -2,7 +2,6 @@ import os
 import time
 import sys
 import numpy as np
-import torch
 import open3d as o3d
 from pathlib import Path
 from collections import Counter
@@ -17,6 +16,7 @@ from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 from visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
 
+import torch
 from network import LitSpot
 
 def collect_realtime_data(robot_state_client, duration=2):
@@ -119,10 +119,12 @@ def visualize_prediction(marker_positions, predicted_class, robot_meshes):
 #     return tf.reduce_mean(correct_predictions)
 
 
-def load_from_checkpoint(checkpoint_path, input_dim, output_dim, markers_path, classify=False, device="cuda"):
+def load_from_checkpoint(checkpoint_path, input_dim, output_dim, markers_path, device, classify):
     """
     Load a model from a checkpoint file.
     """
+    if device == "gpu":
+        device = "cuda"
     checkpoint = torch.load(checkpoint_path, map_location=torch.device(device))
     model = LitSpot(input_dim=input_dim, output_dim=output_dim, markers_path=markers_path, classify=classify)
     model.load_state_dict(checkpoint['state_dict'])
@@ -143,10 +145,12 @@ def main():
     parser.add_argument('--ckpts_path', required=True, help='Path to the trained model')
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--data_dir', required=True, help='Path to the directory containing torque data')
+    parser.add_argument('--device', required=True, help='gpu or cpu')
     parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
 
     options = parser.parse_args()
     classify = options.classify
+    device  = options.device
 
      # Load marker positions
     markers_path = options.markers_path
@@ -159,7 +163,7 @@ def main():
         output_dim = 101
     else:
         output_dim = 3
-    model = load_from_checkpoint(options.ckpts_path, input_dim=24, output_dim=output_dim, markers_path=markers_path, classify=classify)
+    model = load_from_checkpoint(options.ckpts_path, input_dim=24, output_dim=output_dim, markers_path=markers_path, classify=classify, device=device)
     print("Model loaded successfully.")
 
     # Initialize robot and client
@@ -281,13 +285,17 @@ def main():
             buffer = np.roll(buffer, 1, axis=0) 
             processed_data_tensor = torch.tensor(processed_data, dtype=torch.float32).to(model.device)
             with torch.no_grad():
-                buffer[0] = model.predict(processed_data_tensor).cpu().numpy()
+                if device == "gpu":
+                    buffer[0] = model.predict(processed_data_tensor).cpu().numpy()
+                else:
+                    buffer[0] = model.predict(processed_data_tensor).numpy()
             predictions = np.dot(weights, buffer)
             if classify:
                     predictions = predictions.reshape(-1, 101)
                     predicted_class_index = np.argmax(predictions)
                     confidence = np.max(predictions)
                     predicted_class = classes[predicted_class_index]
+                    print(f"Prediction: {predicted_class}, Confidence: {confidence:.2f}")
                     if predicted_class == "no_contact":
                         pos = np.array([0, 0, 0])
                     else:
@@ -301,13 +309,13 @@ def main():
                 squared_differences = differences**2
                 weighted_variance = np.dot(weights, np.mean(squared_differences, axis=1))  # Average squared differences
                 confidence = 1 / (1 + np.sqrt(weighted_variance))  # Inverse relation: lower variance → higher confidence
-                print(f"prediction:{buffer[0]}")
+                # print(f"prediction:{buffer[0]}")
             # predicted_class_index = np.argmax(predictions)
 
 
 
             # predicted_class = classes[predicted_class_index]
-            print(f"Prediction: {predictions}, Confidence: {confidence:.2f}")
+            # print(f"Prediction: {predictions}, Confidence: {confidence:.2f}")
             for pcd, orig_color in zip(visualizer.point_clouds, original_colors):
                 pcd.colors = o3d.utility.Vector3dVector(orig_color)
             # if predicted_class == "no_contact" :
@@ -340,8 +348,8 @@ def main():
 
             vis.poll_events()
             vis.update_renderer()
-            print(f"loop iteration time: {time.time() - start:.2f}s")
-            print(f"loop iteration frequency: {1 / (time.time() - start):.2f}Hz")
+            # print(f"loop iteration time: {time.time() - start:.2f}s")
+            # print(f"loop iteration frequency: {1 / (time.time() - start):.2f}Hz")
     except KeyboardInterrupt:
         print("Exiting real-time inference...")
     except Exception as e:
