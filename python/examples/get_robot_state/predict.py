@@ -167,7 +167,7 @@ def main():
         output_dim = 101
     else:
         output_dim = 3
-    model = load_from_checkpoint(options.ckpts_path, input_dim=24 * seq, output_dim=output_dim * seq, markers_path=markers_path, classify=classify, device=device)
+    model = load_from_checkpoint(options.ckpts_path, input_dim=24 * seq, output_dim=output_dim * seq, markers_path=markers_path, classify=classify, device=device, seq=seq)
     print("Model loaded successfully.")
 
     # Initialize robot and client
@@ -252,7 +252,7 @@ def main():
         buffer = np.zeros((sliding_win, 101))
     else:
         buffer = np.zeros((sliding_win, 3))
-    state_buffer = np.zeros((seq_win, 24))
+    data_buffer = np.zeros((seq_win, 24))
     weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
     # normalize - in the regression case, weighted average
@@ -272,15 +272,12 @@ def main():
     try:
         while True:
             start = time.time()
-            state_buffer = np.roll(state_buffer, 1, axis=0) 
+            data_buffer = np.roll(data_buffer, 1, axis=0) 
             state = robot_state_client.get_robot_state()
-            state_buffer[0] = state
 
             # Preprocess the data for inference
-            processed_data = np.zeros((seq, 24))
-            for i, cur_state in enumerate(state_buffer):
-                processed_data[i]= preprocess_realtime_data(cur_state, markers_path)
-            preprocessed_data = processed_data.flatten()
+            processed_data = preprocess_realtime_data(state, markers_path)
+            data_buffer[0] = processed_data
             print(f"Processed data shape: {processed_data.shape}")
             joint_positions = {joint.name: 0.0 for joint in visualizer.robot.joints}
             joint_states = state.kinematic_state.joint_states
@@ -294,12 +291,14 @@ def main():
 
             # Real time prediction
             buffer = np.roll(buffer, 1, axis=0) 
-            processed_data_tensor = torch.tensor(processed_data, dtype=torch.float32).to(model.device)
+            # processed_data = data_buffer.flatten()
+            processed_data_tensor = torch.tensor(data_buffer.flatten(), dtype=torch.float32).to(model.device).reshape(1, -1)
             with torch.no_grad():
                 if device == "gpu":
-                    buffer[0:seq] = model.predict(processed_data_tensor).cpu().numpy()
+                    buffer[0:seq] = model.predict(processed_data_tensor).cpu().numpy().reshape(seq, -1)
                 else:
-                    buffer[0:seq] = model.predict(processed_data_tensor).numpy()
+                    result = model.predict(processed_data_tensor).numpy()
+                    buffer[0:seq] = model.predict(processed_data_tensor).numpy().reshape(seq, -1)
             predictions = np.dot(weights, buffer)
             if classify:
                     predictions = predictions.reshape(-1, 101)
@@ -313,7 +312,6 @@ def main():
                         pos = marker_positions.get(predicted_class)
             else:
                 pos = predictions
-
                 # Compute the weighted variance
                 weighted_mean = predictions
                 differences = buffer - weighted_mean  # Difference between each row and the mean
