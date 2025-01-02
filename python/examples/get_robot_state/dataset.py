@@ -62,8 +62,9 @@ class JointLabel:
         print(f"Preprocessing data...")
         num_dir = len([name for name in os.listdir(self.torque_dir) if os.path.isdir(os.path.join(self.torque_dir, name))])
         num_dir = 21
+        start_dir = 10
         # randomly pick a number from 0 to num_dir
-        val_indices = random.sample(range(num_dir), 4) 
+        val_indices = random.sample(range(start_dir, num_dir), 4) 
         train_dirs = []
         val_dirs = []
         dirs = natsorted(os.listdir(self.torque_dir))
@@ -116,8 +117,8 @@ class SpotDataset(Dataset):
         self.mode = mode
         self.seq = seq
         self.dataset_mode = dataset_mode
-        self.joint_data = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_joint_data.npy", allow_pickle=True)
-        self.contact_labels = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_contact_labels.npy", allow_pickle=True)
+        self.joint_data = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_joint_data_{seq}.npy", allow_pickle=True)
+        self.contact_labels = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_contact_labels_{seq}.npy", allow_pickle=True)
 
         assert len(self.joint_data) == len(self.contact_labels), "Length of joint data and contact labels should be the same"
     
@@ -201,26 +202,26 @@ if __name__ == "__main__":
     folder_path =  Path(__file__).parent
     torque_dir = os.path.join(folder_path, data_dir, session)
 
-    # joint_label = JointLabel(torque_dir, markers_path, classify=classify)
+    joint_label = JointLabel(torque_dir, markers_path, classify=classify)
     
-    # print(f"Saving training and validation data")
+    print(f"Saving training and validation data")
     if classify:
         dataset_mode = "classify"
     else:
         dataset_mode = "regression"
-    # save_dir = os.path.join("preprocessed_data", dataset_mode)
-    # os.makedirs(save_dir, exist_ok=True)
-    # if classify:
-    #     training_labels = np.stack(joint_label.training_labels)  # Stack instead of simple array conversion
-    #     validation_labels = np.stack(joint_label.validation_labels)
-    # else:
-    #     training_labels = np.array(joint_label.training_labels)
-    #     validation_labels = np.array(joint_label.validation_labels)
-    # np.save(os.path.join(save_dir,"train_joint_data.npy"), joint_label.training_data)
-    # np.save(os.path.join(save_dir,"train_contact_labels.npy"), training_labels)
-    # np.save(os.path.join(save_dir,"val_joint_data.npy"), joint_label.validation_data)
-    # np.save(os.path.join(save_dir,"val_contact_labels.npy"), validation_labels)
-    # print(f"Training and validation data saved to {save_dir}")
+    save_dir = os.path.join("preprocessed_data", dataset_mode)
+    os.makedirs(save_dir, exist_ok=True)
+    if classify:
+        training_labels = np.stack(joint_label.training_labels)  # Stack instead of simple array conversion
+        validation_labels = np.stack(joint_label.validation_labels)
+    else:
+        training_labels = np.array(joint_label.training_labels)
+        validation_labels = np.array(joint_label.validation_labels)
+    np.save(os.path.join(save_dir,f"train_joint_data_{seq}.npy"), joint_label.training_data)
+    np.save(os.path.join(save_dir,f"train_contact_labels_{seq}.npy"), training_labels)
+    np.save(os.path.join(save_dir,f"val_joint_data_{seq}.npy"), joint_label.validation_data)
+    np.save(os.path.join(save_dir,f"val_contact_labels_{seq}.npy"), validation_labels)
+    print(f"Training and validation data saved to {save_dir}")
 
     train_dataset = SpotDataset(dataset_mode, seq = seq, mode='train')
     print(train_dataset[0])
