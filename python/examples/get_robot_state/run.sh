@@ -5,11 +5,11 @@
 
 # echo "################# DATALOADER ###############################"
 # python dataset.py --session gouger1209 --data_dir data \
-#                     --markers_path data/gouger_markers_pos.txt --classify \
+#                     --markers_path data/gouger_markers_pos.txt --classify --seq 3\
 
-echo "################# TRAINING ###############################"
-python train.py --session gouger1209 --data_dir data \
-                --markers_path data/gouger_markers_pos.txt --device "gpu" --classify \
+# echo "################# TRAINING ###############################"
+# python train.py --session gouger1209 --data_dir data \
+#                 --markers_path data/gouger_markers_pos.txt --device "gpu" --seq 3 --classify \
 
 
 # echo "################# TRAINING ###############################"

@@ -11,7 +11,7 @@ from network import LitSpot
 from dataset import SpotDataModule
 
 
-def main(num_classes, markers_path, classify):
+def main(num_classes, markers_path, classify, seq):
     seed_everything(42)
 
     if classify:
@@ -19,16 +19,16 @@ def main(num_classes, markers_path, classify):
     else:
         tb_logger = TensorBoardLogger("gouger_logs", name="regression")
 
-    data_module = SpotDataModule(classify, batch_size=256)
+    data_module = SpotDataModule(classify, seq, batch_size=256)
     if classify:
         output_dim = num_classes
     else:
         output_dim = 3
-    model = LitSpot(input_dim = 24, output_dim = output_dim, markers_path = markers_path, classify=classify)
+    model = LitSpot(input_dim = 24 * seq, output_dim = output_dim * seq, markers_path = markers_path, classify=classify, seq=seq)
 
 
-    checkpoint_callback = ModelCheckpoint(monitor="val/val_acc", mode="max", save_last=True, filename="best")
-    early_stop_callback = EarlyStopping(monitor="val/val_acc", patience=100, mode="max")
+    checkpoint_callback = ModelCheckpoint(monitor="val_acc", mode="max", save_last=True, filename="best")
+    early_stop_callback = EarlyStopping(monitor="val_acc", patience=100, mode="max")
 
     trainer = Trainer(
         # accelerator="gpu",
@@ -51,6 +51,8 @@ if __name__ == "__main__":
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--device', required=True, help='gpu or cpu')
     parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
+    parser.add_argument('--seq', type=int, help='Train on sequence data, length of sequence')
+
 
     options = parser.parse_args()
 
@@ -59,6 +61,7 @@ if __name__ == "__main__":
     data_dir = options.data_dir
     markers_path = options.markers_path
     device = options.device
+    seq = options.seq
 
     # current folder path 
     folder_path =  Path(__file__).parent
@@ -81,5 +84,5 @@ if __name__ == "__main__":
     # print(f"Euclidean distance between marker 10 and 11: {euclidean_distance}")
     # sys.exit()
 
-    main(num_classes, markers_path, classify)
+    main(num_classes, markers_path, classify, seq)
     

@@ -110,9 +110,10 @@ class JointLabel:
         print(f"Finished loading data from {dir}")
 
 class SpotDataset(Dataset):
-    def __init__(self, dataset_mode, mode='train') -> None:
+    def __init__(self, dataset_mode, seq, mode='train') -> None:
         super().__init__()
         self.mode = mode
+        self.seq = seq
         self.dataset_mode = dataset_mode
         self.joint_data = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_joint_data.npy", allow_pickle=True)
         self.contact_labels = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_contact_labels.npy", allow_pickle=True)
@@ -123,8 +124,26 @@ class SpotDataset(Dataset):
         return len(self.joint_data)
     
     def __getitem__(self, idx):
-        joint_data = self.joint_data[idx]
-        contact_label = self.contact_labels[idx]   
+        if self.seq!= 1:
+            if idx + self.seq > len(self.joint_data):
+                joint_data = np.zeros((self.seq, self.joint_data.shape[1]))
+                contact_label = np.zeros((self.seq, self.contact_labels.shape[1]))
+                for i in range(self.seq):
+                    if idx + i < len(self.joint_data):
+                        joint_data[i] = self.joint_data[idx + i]
+                        contact_label[i] = self.contact_labels[idx + i]
+                    else:
+                        joint_data[i] = self.joint_data[-1]
+                        contact_label[i] = self.contact_labels[-1]
+            else:
+                joint_data = self.joint_data[idx:idx+self.seq]
+                contact_label = self.contact_labels[idx:idx+self.seq]
+            # concantenate
+            joint_data = np.concatenate(joint_data, axis=0)
+            contact_label = np.concatenate(contact_label, axis=0)
+        else:
+            joint_data = self.joint_data[idx]
+            contact_label = self.contact_labels[idx]   
 
         return {
             "joint_data": joint_data,
@@ -132,18 +151,19 @@ class SpotDataset(Dataset):
         }
 
 class SpotDataModule(L.LightningDataModule):
-    def __init__(self, classify, batch_size=32) -> None:
+    def __init__(self, classify, seq, batch_size=32) -> None:
         super().__init__()
         self.batch_size = batch_size
         self.classify = classify
+        self.seq = seq
 
     def setup(self, stage=None):
         if self.classify:
-            self.train_set = SpotDataset(dataset_mode="classify", mode='train')
-            self.val_set = SpotDataset(dataset_mode="classify", mode='val')
+            self.train_set = SpotDataset(dataset_mode="classify", seq = self.seq,  mode='train')
+            self.val_set = SpotDataset(dataset_mode="classify",  seq = self.seq,  mode='val')
         else:
-            self.train_set = SpotDataset(dataset_mode="regression", mode='train')
-            self.val_set = SpotDataset(dataset_mode="regression", mode='val')
+            self.train_set = SpotDataset(dataset_mode="regression",  seq = self.seq,  mode='train')
+            self.val_set = SpotDataset(dataset_mode="regression",  seq = self.seq,  mode='val')
     
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True,
@@ -162,10 +182,12 @@ if __name__ == "__main__":
     parser.add_argument('--data_dir', required=True, help='Output directory for data')
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
+    parser.add_argument('--seq', type=int, help='Train on sequence data, length of sequence')
 
     options = parser.parse_args()
 
     classify = options.classify
+    seq = options.seq
 
     session = options.session
     data_dir = options.data_dir
@@ -178,26 +200,26 @@ if __name__ == "__main__":
     folder_path =  Path(__file__).parent
     torque_dir = os.path.join(folder_path, data_dir, session)
 
-    joint_label = JointLabel(torque_dir, markers_path, classify=classify)
+    # joint_label = JointLabel(torque_dir, markers_path, classify=classify)
     
-    print(f"Saving training and validation data")
+    # print(f"Saving training and validation data")
     if classify:
         dataset_mode = "classify"
     else:
         dataset_mode = "regression"
-    save_dir = os.path.join("preprocessed_data", dataset_mode)
-    os.makedirs(save_dir, exist_ok=True)
-    if classify:
-        training_labels = np.stack(joint_label.training_labels)  # Stack instead of simple array conversion
-        validation_labels = np.stack(joint_label.validation_labels)
-    else:
-        training_labels = np.array(joint_label.training_labels)
-        validation_labels = np.array(joint_label.validation_labels)
-    np.save(os.path.join(save_dir,"train_joint_data.npy"), joint_label.training_data)
-    np.save(os.path.join(save_dir,"train_contact_labels.npy"), training_labels)
-    np.save(os.path.join(save_dir,"val_joint_data.npy"), joint_label.validation_data)
-    np.save(os.path.join(save_dir,"val_contact_labels.npy"), validation_labels)
-    print(f"Training and validation data saved to {save_dir}")
+    # save_dir = os.path.join("preprocessed_data", dataset_mode)
+    # os.makedirs(save_dir, exist_ok=True)
+    # if classify:
+    #     training_labels = np.stack(joint_label.training_labels)  # Stack instead of simple array conversion
+    #     validation_labels = np.stack(joint_label.validation_labels)
+    # else:
+    #     training_labels = np.array(joint_label.training_labels)
+    #     validation_labels = np.array(joint_label.validation_labels)
+    # np.save(os.path.join(save_dir,"train_joint_data.npy"), joint_label.training_data)
+    # np.save(os.path.join(save_dir,"train_contact_labels.npy"), training_labels)
+    # np.save(os.path.join(save_dir,"val_joint_data.npy"), joint_label.validation_data)
+    # np.save(os.path.join(save_dir,"val_contact_labels.npy"), validation_labels)
+    # print(f"Training and validation data saved to {save_dir}")
 
-    train_dataset = SpotDataset(dataset_mode, mode='train')
+    train_dataset = SpotDataset(dataset_mode, seq = seq, mode='train')
     print(train_dataset[0])

@@ -41,9 +41,10 @@ class JointNetwork(nn.Module):
         return self.network(x)
 
 class LitSpot(L.LightningModule):
-    def __init__(self, input_dim: int, output_dim: int, markers_path, classify) -> None:
+    def __init__(self, input_dim: int, output_dim: int, markers_path, classify, seq) -> None:
         super().__init__()
         self.model = JointNetwork(input_dim, output_dim, classify)
+        self.seq = seq
         # self.device = device  
 
         self.classify = classify
@@ -67,9 +68,10 @@ class LitSpot(L.LightningModule):
     def training_step(self, batch, batch_idx):
         device = self._get_device()
         x, y = batch["joint_data"].float().to(device), batch["contact_label"].float().to(device)
+        
         y_hat = self(x) # shape batch_size by 3
 
-        threshold = 0.1
+        threshold = 0.1 * np.sqrt(self.seq)
         if self.classify:
             # if self.device == "gpu":
             #     y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
@@ -90,7 +92,7 @@ class LitSpot(L.LightningModule):
             # acc = metrics.accuracy_score(y_label, y_hat_label)
             correct = np.linalg.norm(y_pos - y_hat_pos, axis=1) < threshold
             acc = np.mean(correct)
-            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
+            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1) / np.sqrt(self.seq)
 
         else:
             loss = F.mse_loss(y_hat, y)
@@ -101,45 +103,46 @@ class LitSpot(L.LightningModule):
             #     y_hat_pos = y_hat.detach().numpy()
             #     y_pos = y.numpy()
 
-            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
+            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1) / np.sqrt(self.seq)
 
-            # calculate the distance from y_hat_pos to all the marker positions
-            distances = np.linalg.norm(
-                self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
-                axis=2)
-            # get closest marker index
-            min_indices = np.argmin(distances, axis=1) 
-            min_indices = torch.tensor(min_indices, dtype=torch.long)
-            # get closest class indices
-            y_label = []
-            for i, pos in enumerate(y_pos):
-                rounded_pos = tuple(np.round(pos, decimals=4))
-                # get class index from coord using reverse mapping
-                y_label.append(int(self.rev_marker_positions.get(rounded_pos)))
-                appended = int(self.rev_marker_positions.get(rounded_pos))
-            y_label = torch.tensor(y_label, dtype=torch.long).to(device)
-            # calculate accuracy based on whether classes are the same
-            # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
+            # # calculate the distance from y_hat_pos to all the marker positions
+            # distances = np.linalg.norm(
+            #     self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
+            #     axis=2)
+            # # get closest marker index
+            # min_indices = np.argmin(distances, axis=1) 
+            # min_indices = torch.tensor(min_indices, dtype=torch.long)
+            # # get closest class indices
+            # y_label = []
+            # for i, pos in enumerate(y_pos):
+            #     rounded_pos = tuple(np.round(pos, decimals=4))
+            #     # get class index from coord using reverse mapping
+            #     y_label.append(int(self.rev_marker_positions.get(rounded_pos)))
+            #     appended = int(self.rev_marker_positions.get(rounded_pos))
+            # y_label = torch.tensor(y_label, dtype=torch.long).to(device)
+            # # calculate accuracy based on whether classes are the same
+            # # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
 
-            min_coords = self.marker_posarray[min_indices]
+            # min_coords = self.marker_posarray[min_indices]
             # acc = np.sum(min_coords == y_pos) / len(y_pos)
             # threshold = 1e-5
             correct = np.linalg.norm(y_pos - y_hat_pos, axis=1) < threshold
             # correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
             acc = np.mean(correct)
 
-        self.log("train/train_loss", loss, on_epoch = True, prog_bar=True)
-        self.log("train/train_acc", acc, on_epoch = True, prog_bar=True)
-        self.log("train/train_dist", euclidean_distance.mean(), on_epoch = True, prog_bar=True)
+        self.log("train_loss", loss, on_epoch = True, prog_bar = True)
+        self.log("train_acc", acc, on_epoch = True, prog_bar = True)
+        self.log("train_dist", euclidean_distance.mean(), on_epoch = True, prog_bar = True)
 
         return loss
     
     def validation_step(self, batch, batch_idx):
         device = self._get_device()
         x, y = batch["joint_data"].float().to(device), batch["contact_label"].float().to(device)
+
         y_hat = self(x)
 
-        threshold = 0.1
+        threshold = 0.1 * np.sqrt(self.seq)
         if self.classify:
             # if self.device == "gpu":
             #     y_hat_idx = torch.argmax(y_hat, dim=1).cpu()
@@ -160,7 +163,7 @@ class LitSpot(L.LightningModule):
             correct = np.linalg.norm(y_pos - y_hat_pos, axis=1) < threshold
             acc = np.mean(correct)
 
-            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
+            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1) / np.sqrt(self.seq)
 
         else:
             loss = F.mse_loss(y_hat, y)
@@ -171,43 +174,44 @@ class LitSpot(L.LightningModule):
             #     y_hat_pos = y_hat.detach().numpy()
             #     y_pos = y.numpy()
 
-            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1)
+            euclidean_distance = np.linalg.norm(y_pos - y_hat_pos, axis=1) / np.sqrt(self.seq)
 
             # calculate the distance from y_hat_pos to all the marker positions
-            distances = np.linalg.norm(
-                self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
-                axis=2)
-            # get closest marker index
-            min_indices = np.argmin(distances, axis=1) 
-            min_indices = torch.tensor(min_indices, dtype=torch.long)
-            # get closest class indices
-            y_label = []
-            for i, pos in enumerate(y_pos):
-                rounded_pos = tuple(np.round(pos, decimals=4))
-                # get class index from coord using reverse mapping
-                y_label.append(int(self.rev_marker_positions.get(rounded_pos)))
-                appended = int(self.rev_marker_positions.get(rounded_pos))
-            y_label = torch.tensor(y_label, dtype=torch.long).to(device)
-            # calculate accuracy based on whether classes are the same
-            # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
+            # distances = np.linalg.norm(
+            #     self.marker_posarray[None, :, :] - y_hat_pos[:, None, :],
+            #     axis=2)
+            # # get closest marker index
+            # min_indices = np.argmin(distances, axis=1) 
+            # min_indices = torch.tensor(min_indices, dtype=torch.long)
+            # # get closest class indices
+            # y_label = []
+            # for i, pos in enumerate(y_pos):
+            #     rounded_pos = tuple(np.round(pos, decimals=4))
+            #     # get class index from coord using reverse mapping
+            #     y_label.append(int(self.rev_marker_positions.get(rounded_pos)))
+            #     appended = int(self.rev_marker_positions.get(rounded_pos))
+            # y_label = torch.tensor(y_label, dtype=torch.long).to(device)
+            # # calculate accuracy based on whether classes are the same
+            # # acc = torch.sum(min_indices == y_label).item() / y_label.shape[0]
 
-            min_coords = self.marker_posarray[min_indices]
+            # min_coords = self.marker_posarray[min_indices]
             # acc = np.sum(min_coords == y_pos) / len(y_pos)
             # threshold = 1e-5
-            correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
+            # correct = np.linalg.norm(y_pos - min_coords, axis=1) < threshold
+            correct = np.linalg.norm(y_pos - y_hat_pos, axis=1) < threshold
             acc = np.mean(correct)
 
-        self.log("val/val_loss", loss, on_epoch = True, prog_bar=True)
-        self.log("val/val_acc", acc, on_epoch = True, prog_bar=True)
-        self.log("val/val_dist", euclidean_distance.mean(), on_epoch = True, prog_bar=True)
+        self.log("val_loss", loss, on_epoch = True, prog_bar = True)
+        self.log("val_acc", acc, on_epoch = True, prog_bar = True)
+        self.log("val_dist", euclidean_distance.mean(), on_epoch = True, prog_bar = True)
 
         return loss
     
 
     def on_validation_epoch_end(self):
-        avg_val_loss = self.trainer.logged_metrics.get("val/val_loss")
-        val_acc = self.trainer.logged_metrics.get("val/val_acc")
-        val_dist = self.trainer.logged_metrics.get("val/val_dist")
+        avg_val_loss = self.trainer.logged_metrics.get("val_loss")
+        val_acc = self.trainer.logged_metrics.get("val_acc")
+        val_dist = self.trainer.logged_metrics.get("val_dist")
         print(f"Epoch {self.current_epoch}: Val Loss: {avg_val_loss:.4f}, Val Acc: {val_acc:.4f}, Val Euclidean Distance: {val_dist:.4f}")
 
 

@@ -32,7 +32,7 @@ def collect_realtime_data(robot_state_client, duration=2):
 
     return np.array(data)
 
-def preprocess_realtime_data(data, offset, markers_path, normalize=True):
+def preprocess_realtime_data(data, markers_path, normalize=True):
     """
     Preprocess the real-time data for inference.
     """
@@ -119,14 +119,14 @@ def visualize_prediction(marker_positions, predicted_class, robot_meshes):
 #     return tf.reduce_mean(correct_predictions)
 
 
-def load_from_checkpoint(checkpoint_path, input_dim, output_dim, markers_path, device, classify):
+def load_from_checkpoint(checkpoint_path, input_dim, output_dim, markers_path, device, classify, seq):
     """
     Load a model from a checkpoint file.
     """
     if device == "gpu":
         device = "cuda"
     checkpoint = torch.load(checkpoint_path, map_location=torch.device(device))
-    model = LitSpot(input_dim=input_dim, output_dim=output_dim, markers_path=markers_path, classify=classify)
+    model = LitSpot(input_dim=input_dim, output_dim=output_dim, markers_path=markers_path, classify=classify, seq = seq)
     model.load_state_dict(checkpoint['state_dict'])
     model.to(device)
     model.eval()
@@ -147,10 +147,14 @@ def main():
     parser.add_argument('--data_dir', required=True, help='Path to the directory containing torque data')
     parser.add_argument('--device', required=True, help='gpu or cpu')
     parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
+    parser.add_argument('--seq', type=int, help='Train on sequence data, length of sequence')
+
 
     options = parser.parse_args()
     classify = options.classify
     device  = options.device
+    seq = options.seq
+
 
      # Load marker positions
     markers_path = options.markers_path
@@ -163,7 +167,7 @@ def main():
         output_dim = 101
     else:
         output_dim = 3
-    model = load_from_checkpoint(options.ckpts_path, input_dim=24, output_dim=output_dim, markers_path=markers_path, classify=classify, device=device)
+    model = load_from_checkpoint(options.ckpts_path, input_dim=24 * seq, output_dim=output_dim * seq, markers_path=markers_path, classify=classify, device=device)
     print("Model loaded successfully.")
 
     # Initialize robot and client
@@ -242,11 +246,13 @@ def main():
     radius = 0.04
     alpha = 0.2
     sliding_win = 15
+    seq_win = seq
     # sliding_win = 5
     if classify:
         buffer = np.zeros((sliding_win, 101))
     else:
         buffer = np.zeros((sliding_win, 3))
+    state_buffer = np.zeros((seq_win, 24))
     weights = np.power((1 - alpha), np.arange(sliding_win))
     weights = alpha * weights
     # normalize - in the regression case, weighted average
@@ -266,10 +272,15 @@ def main():
     try:
         while True:
             start = time.time()
+            state_buffer = np.roll(state_buffer, 1, axis=0) 
             state = robot_state_client.get_robot_state()
+            state_buffer[0] = state
 
             # Preprocess the data for inference
-            processed_data= preprocess_realtime_data(state, np.zeros(12), markers_path)
+            processed_data = np.zeros((seq, 24))
+            for i, cur_state in enumerate(state_buffer):
+                processed_data[i]= preprocess_realtime_data(cur_state, markers_path)
+            preprocessed_data = processed_data.flatten()
             print(f"Processed data shape: {processed_data.shape}")
             joint_positions = {joint.name: 0.0 for joint in visualizer.robot.joints}
             joint_states = state.kinematic_state.joint_states
@@ -286,9 +297,9 @@ def main():
             processed_data_tensor = torch.tensor(processed_data, dtype=torch.float32).to(model.device)
             with torch.no_grad():
                 if device == "gpu":
-                    buffer[0] = model.predict(processed_data_tensor).cpu().numpy()
+                    buffer[0:seq] = model.predict(processed_data_tensor).cpu().numpy()
                 else:
-                    buffer[0] = model.predict(processed_data_tensor).numpy()
+                    buffer[0:seq] = model.predict(processed_data_tensor).numpy()
             predictions = np.dot(weights, buffer)
             if classify:
                     predictions = predictions.reshape(-1, 101)
