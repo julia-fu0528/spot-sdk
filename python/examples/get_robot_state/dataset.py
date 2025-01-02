@@ -61,7 +61,7 @@ class JointLabel:
     def preprocess_data(self):
         print(f"Preprocessing data...")
         num_dir = len([name for name in os.listdir(self.torque_dir) if os.path.isdir(os.path.join(self.torque_dir, name))])
-        num_dir = 9
+        num_dir = 21
         # randomly pick a number from 0 to num_dir
         val_indices = random.sample(range(num_dir), 4) 
         train_dirs = []
@@ -74,6 +74,7 @@ class JointLabel:
                     val_dirs.append(os.path.join(self.torque_dir, dir))
                 else:
                     train_dirs.append(os.path.join(self.torque_dir, dir))
+        print(f"val dirs: {val_dirs}")
         for train_dir in train_dirs:
             self.load_data(train_dir, mode='train')
         for val_dir in val_dirs:

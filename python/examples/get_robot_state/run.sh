@@ -3,9 +3,9 @@
 #                             --output_dir data/gouger1209/stand_h5 \
 #                             --markers_path data/gouger_markers_pos.txt\
 
-# echo "################# DATALOADER ###############################"
-# python dataset.py --session gouger1209 --data_dir data \
-#                     --markers_path data/gouger_markers_pos.txt --classify --seq 3\
+echo "################# DATALOADER ###############################"
+python dataset.py --session gouger1209 --data_dir data \
+                    --markers_path data/gouger_markers_pos.txt --classify --seq 3\
 
 # echo "################# TRAINING ###############################"
 # python train.py --session gouger1209 --data_dir data \
