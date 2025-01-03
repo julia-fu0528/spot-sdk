@@ -18,7 +18,7 @@ from urdfpy import URDF
 import open3d as o3d
 import random
 
-from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
+from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera, look_at
 from visualize_robot_state import find_closest_vertices, add_red_dots, compute_forward_kinematics, prepare_trimesh_fk, \
 convert_trimesh_to_open3d, create_red_markers, visualize_robot_with_markers, combine_meshes_o3d
 
@@ -174,29 +174,40 @@ def main():
     # o3d.visualization.draw_geometries(robot_meshes + markers[0:4])
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
-    print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
-    collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
+    # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
+    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
     # os.makedirs("data/test1203", exist_ok=True)
+    vertices = np.asarray(robot_meshes[0].vertices)
+    robot_meshes[0].compute_vertex_normals()
+
+
+
     for idx, pos in marker_positions.items():
-        if 3 < int(idx)<82:
+        # if 3 < int(idx)<82:
         # if int(idx) < 82:
-            continue
+            # continue
+
+        distances = np.linalg.norm(vertices - pos, axis=1)
+        index = np.argmin(distances)
+        normal_at_vertex = robot_meshes[0].vertex_normals[index]
+        distance = 2.0
+        camera_position = pos - distance * normal_at_vertex
+        # forward_vector = pos - camera_position
+        # if np.dot(up_vector, forward_vector) > 0.99:  # Too parallel
+        #     up_vector = np.array([1.0, 0.0, 0.0])
+
+
         # Create marker for current position
         marker = create_red_markers([pos], radius=0.02)[0]
-
-        normal = get_vertex_normal_at_position(robot_meshes[0], pos)
-
-        
-        # Create camera parameters facing the marker
-        camera_params = create_viewing_parameters(pos)
-        
-        # Combine geometries
         geometries = robot_meshes + [marker]
         
         print(f"Viewing marker {idx} . Press Ctrl+C in terminal to proceed to next view.")
         
         # Visualize with specific camera view
-        visualize_with_camera(geometries, camera_params)
+        front = pos - camera_position
+        front /= np.linalg.norm(front)
+        up = np.array([0.0, 0.0, 1.0])
+        o3d.visualization.draw_geometries(geometries, zoom=0.5, front = - front, lookat=pos, up = up)
         # user_input = input(f"Is marker position {idx} legit? Enter 'y' for yes, 'n' for no (default: 'y'): \n").strip().lower()
     
         # if user_input == 'n':
@@ -205,8 +216,9 @@ def main():
         output_path = os.path.join(output_dir, f"{idx}.npy")
         print(f"YOU CAN TOUCH THE SPOT NOW. Data collection will start in 5 seconds, please make sure you are touching the Spot.\n")
         time.sleep(4)
-        collect_data(output_path, hostname, command, duration)
+        # collect_data(output_path, hostname, command, duration)
         print(f"Touch Data Collected for marker position {idx}, saved in {output_path}\n")
+        
         
 
     
