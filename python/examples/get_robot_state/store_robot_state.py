@@ -171,7 +171,7 @@ def main():
     print("Loaded markers positions: ", markers_pos)
     print(f"Total number of markers: {len(markers_pos)}")
     # markers = create_red_markers(markers_pos, radius=0.02)
-    # o3d.visualization.draw_geometries(robot_meshes + markers[0:4])
+    # o3d.visualization.draw_geometries(robot_meshes + markers[34:58])
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
     # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
@@ -181,17 +181,17 @@ def main():
     robot_meshes[0].compute_vertex_normals()
 
 
-
     for idx, pos in marker_positions.items():
         # if 3 < int(idx)<82:
-        # if int(idx) < 82:
+        # if int(idx) < 85:
             # continue
 
         distances = np.linalg.norm(vertices - pos, axis=1)
         index = np.argmin(distances)
+
         normal_at_vertex = robot_meshes[0].vertex_normals[index]
         distance = 2.0
-        camera_position = pos - distance * normal_at_vertex
+        # camera_position = pos - distance * normal_at_vertex
         # forward_vector = pos - camera_position
         # if np.dot(up_vector, forward_vector) > 0.99:  # Too parallel
         #     up_vector = np.array([1.0, 0.0, 0.0])
@@ -204,10 +204,22 @@ def main():
         print(f"Viewing marker {idx} . Press Ctrl+C in terminal to proceed to next view.")
         
         # Visualize with specific camera view
-        front = pos - camera_position
-        front /= np.linalg.norm(front)
+        # front = pos - camera_position
+        # front /= np.linalg.norm(front)
         up = np.array([0.0, 0.0, 1.0])
-        o3d.visualization.draw_geometries(geometries, zoom=0.5, front = - front, lookat=pos, up = up)
+        marker_idx = int(idx)
+        if marker_idx < 2 or 81 < marker_idx < 90:
+            front = np.array([-1.0, 0.0, 0.0])
+        if 1 < marker_idx < 4 or marker_idx > 89:
+            front = np.array([1.0, 0.0, 0.0])
+        if 3 < marker_idx < 6 or 9 < marker_idx < 34:
+            front = np.array([0.0, -1.0, 0.0])
+        if 5 < marker_idx < 8 or 33 < marker_idx < 58:
+            front = np.array([0.0, 1.0, 0.0])
+        if 7 < marker_idx < 10 or 57 < marker_idx < 82:
+            front = np.array([0.0, 0.0, -1.0])
+            up = np.array([0.0, 1.0, 0.0])
+        o3d.visualization.draw_geometries(geometries, zoom=0.5, front = -front, lookat=pos, up = up)
         # user_input = input(f"Is marker position {idx} legit? Enter 'y' for yes, 'n' for no (default: 'y'): \n").strip().lower()
     
         # if user_input == 'n':
@@ -215,7 +227,7 @@ def main():
         #     continue
         output_path = os.path.join(output_dir, f"{idx}.npy")
         print(f"YOU CAN TOUCH THE SPOT NOW. Data collection will start in 5 seconds, please make sure you are touching the Spot.\n")
-        time.sleep(4)
+        # time.sleep(1)
         # collect_data(output_path, hostname, command, duration)
         print(f"Touch Data Collected for marker position {idx}, saved in {output_path}\n")
         

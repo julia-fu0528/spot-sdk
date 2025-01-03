@@ -1,8 +1,7 @@
 echo "################# COLLECT DATA ###########################"
 python store_robot_state.py 138.16.161.21 state \
-                            --output_dir data/gouger1209/test \
                             --markers_path data/gouger_markers_pos.txt\
-                            # --output_dir data/gouger1209/fb_h4 \
+                            --output_dir data/gouger1209/fb_h4 \
 
 # echo "################# DATALOADER ###############################"
 # python dataset.py --session gouger1209 --data_dir data \
@@ -19,7 +18,7 @@ python store_robot_state.py 138.16.161.21 state \
 #                 --markers_path data/gouger_markers_pos.txt \
 
 # echo "################# PREDICTING ################################"
-# python predict.py 138.16.161.21 --ckpts_path gouger_logs/regression/version_172/checkpoints/best.ckpt\
+# python predict.py 138.16.161.21 --ckpts_path gouger_logs/regression/version_181/checkpoints/best.ckpt\
 #                   --markers_path data/gouger_markers_pos.txt --data_dir data/gouger1209 --device cpu --seq 3\
 
 
