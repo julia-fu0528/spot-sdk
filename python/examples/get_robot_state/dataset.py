@@ -61,14 +61,12 @@ class JointLabel:
     def preprocess_data(self):
         print(f"Preprocessing data...")
         num_dir = len([name for name in os.listdir(self.torque_dir) if os.path.isdir(os.path.join(self.torque_dir, name))])
-        num_dir = 21
-        start_dir = 10
+        start_dir = num_dir - 10
         # randomly pick a number from 0 to num_dir
         val_indices = random.sample(range(start_dir, num_dir), 4) 
         train_dirs = []
         val_dirs = []
         dirs = natsorted(os.listdir(self.torque_dir))
-        dirs = dirs[:10] + dirs[-11:]  
         for idx, dir in enumerate(dirs):
             if os.path.isdir(os.path.join(self.torque_dir, dir)):
                 if idx in val_indices:

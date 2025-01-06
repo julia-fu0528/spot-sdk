@@ -18,6 +18,7 @@ from visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, cre
 
 import torch
 from network import LitSpot
+from bosdyn.api.spot import choreography_sequence_pb2
 
 def collect_realtime_data(robot_state_client, duration=2):
     """
@@ -269,6 +270,9 @@ def main():
     point_cloud_sizes = [len(np.asarray(pcd.points)) for pcd in visualizer.point_clouds]
     point_cloud_boundaries = np.cumsum([0] + point_cloud_sizes) 
 
+    # Create choreography client
+    choreography_client = robot.ensure_client('choreography')
+
     try:
         while True:
             start = time.time()
@@ -357,6 +361,22 @@ def main():
 
             vis.poll_events()
             vis.update_renderer()
+            threshold = 0.2
+            distance = np.linalg.norm(pos - coordinates.get("100"))
+            if distance < threshold:
+                # Create command for specific move
+                command = choreography_sequence_pb2.MoveCommand()
+                available_moves = choreography_client.list_all_moves()
+
+                print(f"Available moves: {available_moves}")
+                sys.exit()
+                move_duration = 3 # 3 seconds
+                end_time = time.time() + move_duration
+
+                choreography_client.choreography_command(
+                    command_list=[command],
+                    client_end_time=end_time
+                )
             # print(f"loop iteration time: {time.time() - start:.2f}s")
             # print(f"loop iteration frequency: {1 / (time.time() - start):.2f}Hz")
     except KeyboardInterrupt:

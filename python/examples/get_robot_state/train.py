@@ -19,7 +19,7 @@ def main(num_classes, markers_path, classify, seq):
     else:
         tb_logger = TensorBoardLogger("gouger_logs", name="regression")
 
-    data_module = SpotDataModule(classify, seq, batch_size=256)
+    data_module = SpotDataModule(classify, seq, batch_size=128)
     if classify:
         output_dim = num_classes
     else:
