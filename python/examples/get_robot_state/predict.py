@@ -245,8 +245,8 @@ def main():
     visualizer = SpotVisualizer(vis=vis)
 
     radius = 0.04
-    alpha = 0.2
-    sliding_win = 15
+    alpha = 0.5
+    sliding_win = 7
     seq_win = seq
     # sliding_win = 5
     if classify:

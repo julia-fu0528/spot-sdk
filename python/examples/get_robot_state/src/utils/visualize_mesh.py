@@ -94,3 +94,18 @@ def visualize_with_camera(geometries, camera_params):
     
     vis.run()
     vis.destroy_window()
+
+
+def look_at(camera_pos, target_pos, up_vector):
+    forward = target_pos - camera_pos
+    forward /= np.linalg.norm(forward)
+    
+    right = np.cross(up_vector, forward)
+    right = right / np.linalg.norm(right)
+
+    up = np.cross(forward, right)
+
+    view_matrix = np.eye(4)
+    view_matrix[:3, :3] = np.stack([right, up, forward], axis=1)
+    view_matrix[:3, 3] = -view_matrix[:3, :3] @ camera_pos
+    return view_matrix
