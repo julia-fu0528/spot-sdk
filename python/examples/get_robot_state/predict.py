@@ -148,9 +148,14 @@ def load_from_checkpoint(checkpoint_path, input_dim, output_dim, markers_path, d
     model.eval()
     return model
 
-def exe_choreo(choreography, choreography_client, choreography_name, client_start_time, start_slice, delayed_start):
+def exe_choreo(choreography, choreography_client):
+    routine_name = choreography.name
+    delayed_start = 2.0
+    client_start_time = time.time() + delayed_start
+    # begins at the very beginning.
+    start_slice = 0
     # Issue the command to the robot's choreography service.
-    choreography_client.execute_choreography(choreography_name=choreography_name,
+    choreography_client.execute_choreography(choreography_name=routine_name,
                                              client_start_time=client_start_time,
                                              choreography_starting_slice=start_slice)
     # Estimate how long the choreographed sequence will take.
@@ -236,9 +241,7 @@ def main():
     # Create choreography client
     choreography_client = robot.ensure_client(ChoreographyClient.default_service_name)
     available_moves = choreography_client.list_all_moves()
-    # print("Available moves:", available_moves.moves)
-    # sys.exit()
-    choreos = []
+    choreos = [] # step, trot, turn_2step, twerk, unstow
     for choreo_file in choreo_files:
         try:
             choreos.append(load_choreography_sequence_from_txt_file(choreo_file))
@@ -265,13 +268,6 @@ def main():
     print(f'Sequence uploaded. All sequences on the robot:\n{known_sequences}')
 
     robot.power_on()
-
-    routine_name = choreography.name
-    delayed_start = 0.5
-    client_start_time = time.time() + delayed_start
-    # begins at the very beginning.
-    start_slice = 0
-    exe_choreo(choreography, choreography_client, routine_name, client_start_time, start_slice, delayed_start)
 
     # Sit the robot down and power off the robot.
     # robot.power_off()
@@ -439,7 +435,7 @@ def main():
                 pcd.colors = o3d.utility.Vector3dVector(orig_color)
 
             indices = kdtree.query_ball_point(pos, radius)
-
+            print(f"pos: {pos}")
             for idx in indices:
                 pcd_idx = np.searchsorted(point_cloud_boundaries, idx, side='right') - 1
                 local_idx = idx - point_cloud_boundaries[pcd_idx]
@@ -451,53 +447,47 @@ def main():
             vis.poll_events()
             vis.update_renderer()
             threshold = 1
-            distance = np.linalg.norm(pos - coordinates.get("100"))
-            print(f"pos: {pos}, distance: {distance}")
-            if distance < threshold:
-                print(f"true")
-                current_time = int(time.time())
-                try:
-                    choreography_client.execute_choreography(
-                        choreography_name="my_dance",
-                        client_start_time=int(time.time()),  # Start in 2 seconds
-                        choreography_starting_slice=0,  # Start from beginning
-                        lease=lease_proto,
-                    )
-                    print("Choreography executed successfully!")
-                    time.sleep(5)
-                except Exception as e:
-                    print(f"Error executing choreography: {e}")
-                print(f"executed")
-                # move_command = chor
-                # eography_sequence_pb2.MoveCommand()
-                # move_command.move_type = "rotate_body"
-                # available_moves = choreography_client.list_all_moves()
-                # move_duration = 3.0 # 3 seconds
-                # end_time = time.time() + move_duration
-                # choreography_client.choreography_command(
-                #     command_list = [move_command],
-                #     client_end_time=end_time,
-                #     lease=lease,
-                # )
-    # except KeyboardInterrupt:
-    #     print("Exiting real-time inference...")
-    except (KeyboardInterrupt, Exception) as e:
-        print("Stopping...")
-        # Try to stop any ongoing choreography
-        try:
-            choreography_client.stop_choreography(lease=lease_proto)
-        except Exception as e:
-            print(f"Error stopping choreography: {e}")
+            # distance = np.linalg.norm(pos - coordinates.get("100"))
+            # print(f"pos: {pos}, distance: {distance}")
+            # if distance < threshold:
+            # step, trot, turn_2step, twerk, unstow
+            # left
+            if pos[1] > 0.10 and -0.4 < pos[0] < 0.4 and pos[2] < 0.09:
+                exe_choreo(choreos[0], choreography_client) # step
+            # right
+            elif pos[1] < -0.10 and -0.4 < pos[0] < 0.4 and pos[2] < 0.09:
+                exe_choreo(choreos[1], choreography_client) # trot
+            # front
+            elif pos[0] > 0.24 and -0.14 < pos[1] < 0.14 and pos[2] < 0.09:
+                exe_choreo(choreos[2], choreography_client) # turn_2step
+            # back
+            elif pos[0] < -0.24 and -0.14 < pos[1] < 0.14 and pos[2] < 0.09:
+                exe_choreo(choreos[3], choreography_client) # twerk
+            # # top
+            # elif pos[2] > 0.04:
+            #     exe_choreo(choreos[4], choreography_client) # unstow
+            else:
+                continue
+                
+    except KeyboardInterrupt:
+        print("Exiting real-time inference...")
+    # except (KeyboardInterrupt, Exception) as e:
+    #     print("Stopping...")
+    #     # Try to stop any ongoing choreography
+    #     try:
+    #         choreography_client.stop_choreography(lease=lease_proto)
+    #     except Exception as e:
+    #         print(f"Error stopping choreography: {e}")
     except Exception as e:
         print(f"An error occurred: {e}")
-    finally:
-        # Always clean up lease management
-        if 'lease_client' in locals() and 'lease' in locals():
-            print("Returning lease...")
-            lease_client.return_lease(client_lease)
-        if 'lease_keep_alive' in locals():
-            lease_keep_alive.shutdown()
-        print("Lease returned successfully")
+    # finally:
+    #     # Always clean up lease management
+    #     if 'lease_client' in locals() and 'lease' in locals():
+    #         print("Returning lease...")
+    #         lease_client.return_lease(client_lease)
+    #     if 'lease_keep_alive' in locals():
+    #         lease_keep_alive.shutdown()
+    #     print("Lease returned successfully")
 
 
 if __name__ == "__main__":
