@@ -19,6 +19,16 @@ from visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, cre
 import torch
 from network import LitSpot
 from bosdyn.api.spot import choreography_sequence_pb2
+from bosdyn.client import create_standard_sdk
+from bosdyn.choreography.client.choreography import ChoreographyClient
+from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
+# from bosdyn.api.lease_pb2 import Lease
+from bosdyn.api import lease_pb2
+from google.protobuf.timestamp_pb2 import Timestamp
+from bosdyn.api import header_pb2
+
+# from bosdyn.api.spot.lease_pb2
+
 
 def collect_realtime_data(robot_state_client, duration=2):
     """
@@ -173,11 +183,37 @@ def main():
 
     # Initialize robot and client
     sdk = create_standard_sdk('RobotStateClient')
+    sdk.register_service_client(ChoreographyClient)
+
     robot = sdk.create_robot(options.hostname)
     bosdyn.client.util.authenticate(robot)
     robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
 
-    # markers_pos = [
+    # Get lease client and take control
+    lease_client = robot.ensure_client(LeaseClient.default_service_name)
+    lease_response = lease_client.take()
+    client_lease = lease_response
+    lease_proto = lease_response.lease_proto
+    lease_client.retain_lease(client_lease)
+    lease_keep_alive = LeaseKeepAlive(lease_client)
+    # Create choreography client
+    choreography_client = robot.ensure_client(ChoreographyClient.default_service_name)
+    # lease_client.return_lease(lease)
+    sequence = choreography_sequence_pb2.ChoreographySequence()
+    sequence.name = "my_dance"
+    sequence.slices_per_minute = 60
+
+    move = sequence.moves.add()
+    move.type = "trot" 
+    move.start_slice = 0
+    move.requested_slices = 5
+    # Upload the sequence
+    upload_response = choreography_client.upload_choreography(sequence, non_strict_parsing=True)
+    print("Upload response:", upload_response) 
+    available_moves = choreography_client.list_all_moves()
+    # print("Available moves:", available_moves) 
+    # sys.exit() 
+    # markers_pos = [   
     #     # front
     #     [0.45, 0.06, -0.035],
     #     [0.45, -0.07, -0.035],
@@ -270,8 +306,6 @@ def main():
     point_cloud_sizes = [len(np.asarray(pcd.points)) for pcd in visualizer.point_clouds]
     point_cloud_boundaries = np.cumsum([0] + point_cloud_sizes) 
 
-    # Create choreography client
-    choreography_client = robot.ensure_client('choreography')
 
     try:
         while True:
@@ -361,28 +395,54 @@ def main():
 
             vis.poll_events()
             vis.update_renderer()
-            threshold = 0.2
+            threshold = 1
             distance = np.linalg.norm(pos - coordinates.get("100"))
+            print(f"pos: {pos}, distance: {distance}")
             if distance < threshold:
-                # Create command for specific move
-                command = choreography_sequence_pb2.MoveCommand()
-                available_moves = choreography_client.list_all_moves()
-
-                print(f"Available moves: {available_moves}")
-                sys.exit()
-                move_duration = 3 # 3 seconds
-                end_time = time.time() + move_duration
-
-                choreography_client.choreography_command(
-                    command_list=[command],
-                    client_end_time=end_time
-                )
-            # print(f"loop iteration time: {time.time() - start:.2f}s")
-            # print(f"loop iteration frequency: {1 / (time.time() - start):.2f}Hz")
-    except KeyboardInterrupt:
-        print("Exiting real-time inference...")
+                print(f"true")
+                current_time = int(time.time())
+                try:
+                    choreography_client.execute_choreography(
+                        choreography_name="my_dance",
+                        client_start_time=int(time.time()) + 1,  # Start in 2 seconds
+                        choreography_starting_slice=0,  # Start from beginning
+                        lease=lease_proto,
+                    )
+                    print("Choreography executed successfully!")
+                    time.sleep(6)
+                except Exception as e:
+                    print(f"Error executing choreography: {e}")
+                print(f"executed")
+                # move_command = chor
+                # eography_sequence_pb2.MoveCommand()
+                # move_command.move_type = "rotate_body"
+                # available_moves = choreography_client.list_all_moves()
+                # move_duration = 3.0 # 3 seconds
+                # end_time = time.time() + move_duration
+                # choreography_client.choreography_command(
+                #     command_list = [move_command],
+                #     client_end_time=end_time,
+                #     lease=lease,
+                # )
+    # except KeyboardInterrupt:
+    #     print("Exiting real-time inference...")
+    except (KeyboardInterrupt, Exception) as e:
+        print("Stopping...")
+        # Try to stop any ongoing choreography
+        try:
+            choreography_client.stop_choreography(lease=lease_proto)
+        except Exception as e:
+            print(f"Error stopping choreography: {e}")
     except Exception as e:
         print(f"An error occurred: {e}")
+    finally:
+        # Always clean up lease management
+        if 'lease_client' in locals() and 'lease' in locals():
+            print("Returning lease...")
+            lease_client.return_lease(client_lease)
+        if 'lease_keep_alive' in locals():
+            lease_keep_alive.shutdown()
+        print("Lease returned successfully")
 
 
 if __name__ == "__main__":
