@@ -20,12 +20,17 @@ import torch
 from network import LitSpot
 from bosdyn.api.spot import choreography_sequence_pb2
 from bosdyn.client import create_standard_sdk
-from bosdyn.choreography.client.choreography import ChoreographyClient
+from bosdyn.choreography.client.choreography import (ChoreographyClient,
+                                                     load_choreography_sequence_from_txt_file)
 from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
 # from bosdyn.api.lease_pb2 import Lease
 from bosdyn.api import lease_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from bosdyn.api import header_pb2
+from bosdyn.client import ResponseError, RpcError, create_standard_sdk
+from bosdyn.client.exceptions import UnauthenticatedError
+from bosdyn.client.license import LicenseClient
+
 
 # from bosdyn.api.spot.lease_pb2
 
@@ -143,7 +148,24 @@ def load_from_checkpoint(checkpoint_path, input_dim, output_dim, markers_path, d
     model.eval()
     return model
 
+def exe_choreo(choreography, choreography_client, choreography_name, client_start_time, start_slice, delayed_start):
+    # Issue the command to the robot's choreography service.
+    choreography_client.execute_choreography(choreography_name=choreography_name,
+                                             client_start_time=client_start_time,
+                                             choreography_starting_slice=start_slice)
+    # Estimate how long the choreographed sequence will take.
+    total_choreography_slices = 0
+    for move in choreography.moves:
+        # Calculate the slice when the move will end
+        end_slice = move.start_slice + move.requested_slices
 
+        #  Store the highest end_slice value of all the moves.
+        if total_choreography_slices < end_slice:
+            total_choreography_slices = end_slice
+    estimated_time_seconds = delayed_start + total_choreography_slices / choreography.slices_per_minute * 60.0
+
+    # Sleep for the duration of the dance, plus an extra second.
+    time.sleep(estimated_time_seconds + 1.0)
 
 def main():
     import argparse
@@ -157,14 +179,18 @@ def main():
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
     parser.add_argument('--data_dir', required=True, help='Path to the directory containing torque data')
     parser.add_argument('--device', required=True, help='gpu or cpu')
+    parser.add_argument('--choreography-filepaths', required=True, nargs='+',
+                    help='List of filepath(s) to load the choreographed sequence text files from.')
     parser.add_argument('--classify', action='store_true', help='Run classification model instead of regression')
     parser.add_argument('--seq', type=int, help='Train on sequence data, length of sequence')
+
 
 
     options = parser.parse_args()
     classify = options.classify
     device  = options.device
     seq = options.seq
+    choreo_files = options.choreography_filepaths
 
 
      # Load marker positions
@@ -188,29 +214,81 @@ def main():
     robot = sdk.create_robot(options.hostname)
     bosdyn.client.util.authenticate(robot)
     robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
+    # License 
+    license_client = robot.ensure_client(LicenseClient.default_service_name)
+    if not license_client.get_feature_enabled([ChoreographyClient.license_name
+                                              ])[ChoreographyClient.license_name]:
+        print('This robot is not licensed for choreography.')
+        sys.exit(1)
+     # Check that an estop is connected with the robot so that the robot commands can be executed.
+    assert not robot.is_estopped(), 'Robot is estopped. Please use an external E-Stop client, ' \
+                                    'such as the estop SDK example, to configure E-Stop.'
 
     # Get lease client and take control
     lease_client = robot.ensure_client(LeaseClient.default_service_name)
-    lease_response = lease_client.take()
-    client_lease = lease_response
-    lease_proto = lease_response.lease_proto
-    lease_client.retain_lease(client_lease)
-    lease_keep_alive = LeaseKeepAlive(lease_client)
+    lease = lease_client.take()
+    lk = LeaseKeepAlive(lease_client)
+
+    # client_lease = lease_response
+    # lease_proto = lease_response.lease_proto
+    # lease_client.retain_lease(client_lease)
+
     # Create choreography client
     choreography_client = robot.ensure_client(ChoreographyClient.default_service_name)
-    # lease_client.return_lease(lease)
-    sequence = choreography_sequence_pb2.ChoreographySequence()
-    sequence.name = "my_dance"
-    sequence.slices_per_minute = 60
-
-    move = sequence.moves.add()
-    move.type = "trot" 
-    move.start_slice = 0
-    move.requested_slices = 5
-    # Upload the sequence
-    upload_response = choreography_client.upload_choreography(sequence, non_strict_parsing=True)
-    print("Upload response:", upload_response) 
     available_moves = choreography_client.list_all_moves()
+    # print("Available moves:", available_moves.moves)
+    # sys.exit()
+    choreos = []
+    for choreo_file in choreo_files:
+        try:
+            choreos.append(load_choreography_sequence_from_txt_file(choreo_file))
+        except Exception as excep:
+            print(f'Failed to load choreography. Raised exception: {excep}')
+            return True
+    # upload the routine to the robot
+    # try:
+    #     upload_response = choreography_client.upload_choreography(choreography,
+    #                                                                   non_strict_parsing=True)
+    # except UnauthenticatedError as err:
+    #     print(
+    #         'The robot license must contain \'choreography\' permissions to upload and execute dances. ')
+    #     return True
+    # except ResponseError as err:
+    #     error_msg = 'Choreography sequence upload failed. The following warnings were produced: '
+    #     for warn in err.response.warnings:
+    #         error_msg += warn
+    #     print(error_msg)
+    #     return True
+    
+    sequences_on_robot = choreography_client.list_all_sequences()
+    known_sequences = '\n'.join(sequences_on_robot.known_sequences)
+    print(f'Sequence uploaded. All sequences on the robot:\n{known_sequences}')
+
+    robot.power_on()
+
+    routine_name = choreography.name
+    delayed_start = 0.5
+    client_start_time = time.time() + delayed_start
+    # begins at the very beginning.
+    start_slice = 0
+    exe_choreo(choreography, choreography_client, routine_name, client_start_time, start_slice, delayed_start)
+
+    # Sit the robot down and power off the robot.
+    # robot.power_off()
+    # return True
+    # sys.exit()
+    # sequence = choreography_sequence_pb2.ChoreographySequence()
+    # sequence.name = "my_dance"
+    # sequence.slices_per_minute = 60
+
+    # move = sequence.moves.add()
+    # move.type = "trot" 
+    # move.start_slice = 0
+    # move.requested_slices = 5
+    # Upload the sequence
+    # upload_response = choreography_client.upload_choreography(sequence, non_strict_parsing=True)
+    # print("Upload response:", upload_response) 
+    # available_moves = choreography_client.list_all_moves()
     # print("Available moves:", available_moves) 
     # sys.exit() 
     # markers_pos = [   
@@ -381,12 +459,12 @@ def main():
                 try:
                     choreography_client.execute_choreography(
                         choreography_name="my_dance",
-                        client_start_time=int(time.time()) + 1,  # Start in 2 seconds
+                        client_start_time=int(time.time()),  # Start in 2 seconds
                         choreography_starting_slice=0,  # Start from beginning
                         lease=lease_proto,
                     )
                     print("Choreography executed successfully!")
-                    time.sleep(6)
+                    time.sleep(5)
                 except Exception as e:
                     print(f"Error executing choreography: {e}")
                 print(f"executed")

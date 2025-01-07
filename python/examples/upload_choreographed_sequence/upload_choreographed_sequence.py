@@ -50,7 +50,7 @@ def main():
     # Create a lease and lease keep-alive so we can issue commands. A lease is required to execute
     # a choreographed sequence.
     lease_client = robot.ensure_client(LeaseClient.default_service_name)
-    lease = lease_client.acquire()
+    lease = lease_client.take()
     lk = LeaseKeepAlive(lease_client)
 
     # Create the client for the Choreography service.
