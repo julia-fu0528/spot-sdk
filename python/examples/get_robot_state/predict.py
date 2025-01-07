@@ -356,23 +356,10 @@ def main():
                 squared_differences = differences**2
                 weighted_variance = np.dot(weights, np.mean(squared_differences, axis=1))  # Average squared differences
                 confidence = 1 / (1 + np.sqrt(weighted_variance))  # Inverse relation: lower variance → higher confidence
-                # print(f"prediction:{buffer[0]}")
-            # predicted_class_index = np.argmax(predictions)
 
-
-
-            # predicted_class = classes[predicted_class_index]
-            # print(f"Prediction: {predictions}, Confidence: {confidence:.2f}")
             for pcd, orig_color in zip(visualizer.point_clouds, original_colors):
                 pcd.colors = o3d.utility.Vector3dVector(orig_color)
-            # if predicted_class == "no_contact" :
-            # or confidence < 0.1:
-                # pos = [0, 0, 0]
-                # print(f"Predicted class: {predicted_class}, Confidence: {confidence:.2f}")
 
-            # Visualize the prediction
-            # else:
-            # pos = marker_positions.get(predicted_class)
             indices = kdtree.query_ball_point(pos, radius)
 
             for idx in indices:
@@ -382,16 +369,6 @@ def main():
                 colors = np.asarray(visualizer.point_clouds[pcd_idx].colors)
                 colors[local_idx] = [1, 0, 0]
                 visualizer.point_clouds[pcd_idx].colors = o3d.utility.Vector3dVector(colors)
-                # total_mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
-                # point_cloud.colors = o3d.utility.Vector3dVector(colors)
-                # total_mesh.compute_vertex_normals()
-                # R = np.eye(3)
-                # T = np.eye(4)
-                # T[:3, :3] = R 
-                # T[:3, 3] = pos
-            # marker.translate(pos - marker.get_center(), relative=False)
-            # marker.translate(pos, relative=False)
-            # vis.update_geometry(point_cloud)
 
             vis.poll_events()
             vis.update_renderer()
