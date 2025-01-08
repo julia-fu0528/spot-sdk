@@ -1,17 +1,17 @@
 
-echo "################# COLLECT DATA ###########################"
-python store_robot_state.py 138.16.161.22 state \
-                            --markers_path data/gouger_markers_pos.txt\
-                            --output_dir data/gouger1209/tft_l1 \
+# echo "################# COLLECT DATA ###########################"
+# python store_robot_state.py 138.16.161.22 state \
+#                             --markers_path data/gouger_markers_pos.txt\
+#                             --output_dir data/gouger1209/tft_l1 \
 
 
-# echo "################# DATALOADER ###############################"
-# python dataset.py --session gouger1209 --data_dir data \
-#                     --markers_path data/gouger_markers_pos.txt --seq 3\
+echo "################# DATALOADER ###############################"
+python dataset.py --session gouger1209 --data_dir data \
+                    --markers_path data/gouger_markers_pos.txt --seq 1 \
 
 echo "################# TRAINING ###############################"
 python train.py --session gouger1209 --data_dir data \
-                --markers_path data/gouger_markers_pos.txt --device "gpu" --seq 3 \
+                --markers_path data/gouger_markers_pos.txt --device "gpu" --seq 1 \
 
 
 # echo "################# TRAINING ###############################"
