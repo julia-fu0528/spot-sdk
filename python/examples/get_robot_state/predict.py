@@ -249,19 +249,20 @@ def main():
             print(f'Failed to load choreography. Raised exception: {excep}')
             return True
     # upload the routine to the robot
-    # try:
-    #     upload_response = choreography_client.upload_choreography(choreography,
-    #                                                                   non_strict_parsing=True)
-    # except UnauthenticatedError as err:
-    #     print(
-    #         'The robot license must contain \'choreography\' permissions to upload and execute dances. ')
-    #     return True
-    # except ResponseError as err:
-    #     error_msg = 'Choreography sequence upload failed. The following warnings were produced: '
-    #     for warn in err.response.warnings:
-    #         error_msg += warn
-    #     print(error_msg)
-    #     return True
+    for choreo in choreos:
+        try:
+            upload_response = choreography_client.upload_choreography(choreo,
+                                                                        non_strict_parsing=True)
+        except UnauthenticatedError as err:
+            print(
+                'The robot license must contain \'choreography\' permissions to upload and execute dances. ')
+            return True
+        except ResponseError as err:
+            error_msg = 'Choreography sequence upload failed. The following warnings were produced: '
+            for warn in err.response.warnings:
+                error_msg += warn
+            print(error_msg)
+            return True
     
     sequences_on_robot = choreography_client.list_all_sequences()
     known_sequences = '\n'.join(sequences_on_robot.known_sequences)
@@ -355,8 +356,8 @@ def main():
     visualizer = SpotVisualizer(vis=vis)
 
     radius = 0.04
-    alpha = 0.5
-    sliding_win = 7
+    alpha = 0.95
+    sliding_win = 3
     seq_win = seq
     # sliding_win = 5
     if classify:
@@ -452,20 +453,21 @@ def main():
             # if distance < threshold:
             # step, trot, turn_2step, twerk, unstow
             # left
-            if pos[1] > 0.10 and -0.4 < pos[0] < 0.4 and pos[2] < 0.09:
+            if pos[1] > 0.1 and -0.35 < pos[0] < 0.3 and pos[2] < 0.11:
                 exe_choreo(choreos[0], choreography_client) # step
             # right
-            elif pos[1] < -0.10 and -0.4 < pos[0] < 0.4 and pos[2] < 0.09:
+            elif pos[1] < -0.13 and -0.35 < pos[0] < 0.3 and pos[2] < 0.11:
                 exe_choreo(choreos[1], choreography_client) # trot
             # front
-            elif pos[0] > 0.24 and -0.14 < pos[1] < 0.14 and pos[2] < 0.09:
+            elif pos[0] > 0.14 and pos[2] < 0.1 and -0.14 < pos[1] < 0.14:
                 exe_choreo(choreos[2], choreography_client) # turn_2step
             # back
-            elif pos[0] < -0.24 and -0.14 < pos[1] < 0.14 and pos[2] < 0.09:
+            elif pos[0] < -0.4 and pos[2] < 0.1:
+            # and -0.14 < pos[1] < 0.14:
                 exe_choreo(choreos[3], choreography_client) # twerk
-            # # top
-            # elif pos[2] > 0.04:
-            #     exe_choreo(choreos[4], choreography_client) # unstow
+            # top
+            elif pos[2] > 0.11:
+                exe_choreo(choreos[4], choreography_client) # unstow
             else:
                 continue
                 

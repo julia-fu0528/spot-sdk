@@ -171,20 +171,21 @@ def main():
     print("Loaded markers positions: ", markers_pos)
     print(f"Total number of markers: {len(markers_pos)}")
     # markers = create_red_markers(markers_pos, radius=0.02)
-    # o3d.visualization.draw_geometries(robot_meshes + markers[34:58])
+    # o3d.visualization.draw_geometries(robot_meshes + markers[82:92])
+    # sys.exit()
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
-    print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
-    collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration=20)
+    # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
+    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
     # os.makedirs("data/test1203", exist_ok=True)
     vertices = np.asarray(robot_meshes[0].vertices)
     robot_meshes[0].compute_vertex_normals()
 
 
     for idx, pos in marker_positions.items():
-        if int(idx) == 0:
-            break
-        # if 3 < int(idx)<82:
+        # if 1 < int(idx)< 8 or 9 < int(idx) < 58 or int(idx) > 89:
+        if int(idx) < 73 or int(idx) > 89:
+            continue
         # if int(idx) < 85:
             # continue
 
@@ -229,8 +230,8 @@ def main():
         #     continue
         output_path = os.path.join(output_dir, f"{idx}.npy")
         print(f"YOU CAN TOUCH THE SPOT NOW. Data collection will start in 5 seconds, please make sure you are touching the Spot.\n")
-        # time.sleep(1)
-        # collect_data(output_path, hostname, command, duration)
+        time.sleep(2)
+        collect_data(output_path, hostname, command, duration)
         print(f"Touch Data Collected for marker position {idx}, saved in {output_path}\n")
         
         
