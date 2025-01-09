@@ -175,13 +175,13 @@ def main():
     # sys.exit()
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
-    # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
-    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
+    print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
+    collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration=20)
     # os.makedirs("data/test1203", exist_ok=True)
     vertices = np.asarray(robot_meshes[0].vertices)
     robot_meshes[0].compute_vertex_normals()
 
-
+    sys.exit()
     for idx, pos in marker_positions.items():
         if int(idx)< 4 or 5 < int(idx) < 10 or int(idx) > 33:
             continue

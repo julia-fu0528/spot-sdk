@@ -459,14 +459,14 @@ def main():
             elif pos[1] < -0.1 and -0.35 < pos[0] < 0.3 and pos[2] < 0.11:
                 exe_choreo(choreos[1], choreography_client) # trot
             # front
-            elif pos[0] > 0.4 and pos[2] < 0.1 and -0.14 < pos[1] < 0.14:
+            elif pos[0] > 0.45 and pos[2] < 0.1 and -0.14 < pos[1] < 0.14:
                 exe_choreo(choreos[2], choreography_client) # turn_2step
             # back
             elif pos[0] < -0.4 and pos[2] < 0.1:
             # and -0.14 < pos[1] < 0.14:
                 exe_choreo(choreos[3], choreography_client) # twerk
             # top
-            elif pos[2] > 0.09:
+            elif pos[2] > 0.1:
                 exe_choreo(choreos[4], choreography_client) # unstow
             else: 
                 continue
