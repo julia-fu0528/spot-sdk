@@ -171,7 +171,7 @@ def main():
     print("Loaded markers positions: ", markers_pos)
     print(f"Total number of markers: {len(markers_pos)}")
     # markers = create_red_markers(markers_pos, radius=0.02)
-    # o3d.visualization.draw_geometries(robot_meshes + markers[58:82])
+    # o3d.visualization.draw_geometries(robot_meshes + markers[82:90])
     # sys.exit()
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
@@ -182,8 +182,7 @@ def main():
     robot_meshes[0].compute_vertex_normals()
 
     for idx, pos in marker_positions.items():
-        # if int(idx)< 8 or 9 < int(idx) < 58 or int(idx) > 81:
-        if int(idx) != 81:
+        if 1 < int(idx) < 82 or int(idx) > 89:
             continue
         # if int(idx) < 85:
             # continue

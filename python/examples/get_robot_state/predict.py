@@ -466,7 +466,7 @@ def main():
             # and -0.14 < pos[1] < 0.14:
                 exe_choreo(choreos[3], choreography_client) # twerk
             # top
-            elif pos[2] > 0.09:
+            elif pos[2] > 0.11:
                 exe_choreo(choreos[4], choreography_client) # unstow
             else: 
                 continue
