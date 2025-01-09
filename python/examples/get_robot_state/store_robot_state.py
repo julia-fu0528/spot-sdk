@@ -171,19 +171,19 @@ def main():
     print("Loaded markers positions: ", markers_pos)
     print(f"Total number of markers: {len(markers_pos)}")
     # markers = create_red_markers(markers_pos, radius=0.02)
-    # o3d.visualization.draw_geometries(robot_meshes + markers[10:34])
+    # o3d.visualization.draw_geometries(robot_meshes + markers[58:82])
     # sys.exit()
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print(f"marker positions: {marker_positions}")
     # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
-    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration)
+    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration=20)
     # os.makedirs("data/test1203", exist_ok=True)
     vertices = np.asarray(robot_meshes[0].vertices)
     robot_meshes[0].compute_vertex_normals()
 
-
     for idx, pos in marker_positions.items():
-        if int(idx)< 4 or 5 < int(idx) < 10 or int(idx) > 33:
+        # if int(idx)< 8 or 9 < int(idx) < 58 or int(idx) > 81:
+        if int(idx) != 81:
             continue
         # if int(idx) < 85:
             # continue
