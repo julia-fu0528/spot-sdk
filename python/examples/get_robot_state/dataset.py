@@ -64,7 +64,7 @@ class JointLabel:
         start_dir = 28
         end_dir = 39
         # randomly pick a number from 0 to num_dir
-        val_indices = random.sample(range(start_dir, num_dir), 2) + random.sample(range(0, 10), 2)
+        val_indices = random.sample(range(start_dir, end_dir), 2) + random.sample(range(0, 10), 2)
         train_dirs = []
         val_dirs = []
         dirs = natsorted(os.listdir(self.torque_dir))
