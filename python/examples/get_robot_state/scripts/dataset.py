@@ -118,8 +118,9 @@ class SpotDataset(Dataset):
         self.mode = mode
         self.seq = seq
         self.dataset_mode = dataset_mode
-        self.joint_data = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_joint_data_{seq}.npy", allow_pickle=True)
-        self.contact_labels = np.load(f"preprocessed_data/{self.dataset_mode}/{mode}_contact_labels_{seq}.npy", allow_pickle=True)
+        folder_path = Path(__file__).parent.parent
+        self.joint_data = np.load(f"{folder_path}/preprocessed_data/{self.dataset_mode}/{mode}_joint_data_{seq}.npy", allow_pickle=True)
+        self.contact_labels = np.load(f"{folder_path}/preprocessed_data/{self.dataset_mode}/{mode}_contact_labels_{seq}.npy", allow_pickle=True)
 
         assert len(self.joint_data) == len(self.contact_labels), "Length of joint data and contact labels should be the same"
     
@@ -211,7 +212,8 @@ if __name__ == "__main__":
         dataset_mode = "classify"
     else:
         dataset_mode = "regression"
-    save_dir = os.path.join("preprocessed_data", dataset_mode)
+
+    save_dir = os.path.join(folder_path.parent, "preprocessed_data", dataset_mode)
     os.makedirs(save_dir, exist_ok=True)
     if classify:
         training_labels = np.stack(joint_label.training_labels)  # Stack instead of simple array conversion
