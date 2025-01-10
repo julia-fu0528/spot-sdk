@@ -93,6 +93,7 @@ def main():
     parser.add_argument('command', choices=list(commands), help='Command to run')
     parser.add_argument('--output_dir', required=True, help='Output directory for data')
     parser.add_argument('--markers_path', required=True, help='Path to markers positions')
+    parser.add_argument('--robot_type', required=True, help='Robot type: spot or franka')
     parser.add_argument('--duration', type=int, default=10, help='Duration to collect data')
     options = parser.parse_args()
 
@@ -101,15 +102,17 @@ def main():
     command = options.command
     output_dir = options.output_dir
     markers_path = options.markers_path
+    robot_type = options.robot_type
     duration = options.duration
     os.makedirs(output_dir, exist_ok=True)
 
-    robot = URDF.load('spot_description/spot.urdf')
+    robot = URDF.load(f'{robot_type}_description/{robot_type}.urdf')
     joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
     link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
-    trimesh_fk, _ = prepare_trimesh_fk(robot, link_fk_transforms, folder="spot_description")
+    trimesh_fk, _ = prepare_trimesh_fk(robot, link_fk_transforms, folder=f"{robot_type}_description")
     robot_meshes, _ = convert_trimesh_to_open3d(trimesh_fk)
-    combined_robot_mesh = combine_meshes_o3d(robot_meshes)
+    o3d.visualization.draw_geometries(robot_meshes)
+    sys.exit()
     # markers_pos = [
     #     # front
     #     [0.45, 0.06, -0.035],

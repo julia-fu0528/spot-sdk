@@ -1,8 +1,9 @@
 
-# echo "################# COLLECT DATA ###########################"
-# python store_robot_state.py 138.16.161.22 state \
-#                             --markers_path data/gouger_markers_pos.txt\
-#                             --output_dir data/gouger1209/tf0 \
+echo "################# COLLECT DATA ###########################"
+python store_robot_state.py 138.16.161.22 state \
+                            --markers_path data/gouger_markers_pos.txt\
+                            --output_dir data/gouger1209/tf0 \
+                            --robot_type franka \
 
 
 # echo "################# DATALOADER ###############################"
@@ -19,10 +20,10 @@
 #                 --model_dir model_torch --log_dir logs_torch --plots_dir plots_torch \
 #                 --markers_path data/gouger_markers_pos.txt \
 
-echo "################# PREDICTING ################################"
-python predict.py 138.16.161.22 --ckpts_path gouger_logs/regression/version_190/checkpoints/best.ckpt\
-                  --markers_path data/gouger_markers_pos.txt --data_dir data/gouger1209 --device cpu --seq 1 \
-                  --choreography-filepaths choreo/step.txt choreo/trot.txt choreo/turn_2step.txt choreo/twerk.txt choreo/unstow.txt\
+# echo "################# PREDICTING ################################"
+# python predict.py 138.16.161.22 --ckpts_path gouger_logs/regression/version_190/checkpoints/best.ckpt\
+#                   --markers_path data/gouger_markers_pos.txt --data_dir data/gouger1209 --device cpu --seq 1 \
+#                   --choreography-filepaths choreo/step.txt choreo/trot.txt choreo/turn_2step.txt choreo/twerk.txt choreo/unstow.txt\
 
 
 
