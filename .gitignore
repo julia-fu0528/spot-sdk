@@ -4,3 +4,4 @@ python/examples/get_robot_state/franka_description/meshes/*
 *.npy
 python/examples/get_robot_state/data/*
 python/examples/get_robot_state/preprocessed_data/*
+python/examples/get_robot_state/gouger_logs/*
