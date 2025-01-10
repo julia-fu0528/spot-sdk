@@ -208,6 +208,11 @@ def find_closest_vertices(mesh, positions, num_points = 10000):
     #     mesh_vertices = np.asarray(mesh_vertices)
     sampled_points = sample_points_from_mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles), num_points)
 
+    # # visualize the points 
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(sampled_points)
+    # o3d.visualization.draw_geometries([pcd])
+    
     # kdtree = KDTree(mesh_vertices)
     kdtree = KDTree(sampled_points)
     
@@ -615,10 +620,6 @@ def prepare_trimesh_fk(robot, link_fk_transforms, folder = None):
                         vertex_colors = vertex_colors.reshape(-1, 4)  # Ensure correct shape
                         mesh.visual.vertex_colors = vertex_colors
 
-                    print(f"Type: {type(mesh.visual.vertex_colors)}")
-                    print(f"Shape: {mesh.visual.vertex_colors.shape}")
-                    print(f"Dimensions: {mesh.visual.vertex_colors.ndim}")
-                    print(f"First few elements: {mesh.visual.vertex_colors[:5]}")
                     mesh.visual.vertex_colors[:, 3] = 255  # Fully opaque
                 # Assign the FK transform
                 transform = link_fk_transforms[link.name]

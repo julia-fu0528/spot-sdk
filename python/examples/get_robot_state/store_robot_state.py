@@ -36,14 +36,11 @@ def collect_data(output_path, hostname, command, duration=10):
         state_dict = []
         start_time = time.time()
 
-        # try:
-            # while True:
         while time.time() - start_time < duration:
             state = robot_state_client.get_robot_state()
             state_dict.append(state)
         
-        # save data whe press ctrl+c
-        # except KeyboardInterrupt as e:
+        # save data 
         print(f"Data collection complete, saved in {output_path}\n")
         np.save(output_path, state_dict)
 
@@ -55,16 +52,6 @@ def collect_data(output_path, hostname, command, duration=10):
     return True
 
 def get_vertex_normal_at_position(mesh, position):
-    """
-    Get the vertex normal of a mesh at a specific position.
-
-    Args:
-        mesh (o3d.geometry.TriangleMesh): The mesh object.
-        position (list or np.ndarray): The 3D position to query.
-
-    Returns:
-        np.ndarray: The normal vector at the closest vertex.
-    """
     # Ensure the mesh has vertex normals computed
     if not mesh.has_vertex_normals():
         mesh.compute_vertex_normals()
@@ -111,95 +98,101 @@ def main():
     link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
     trimesh_fk, _ = prepare_trimesh_fk(robot, link_fk_transforms, folder=f"{robot_type}_description")
     robot_meshes, _ = convert_trimesh_to_open3d(trimesh_fk)
-    o3d.visualization.draw_geometries(robot_meshes)
-    sys.exit()
-    # markers_pos = [
-    #     # front
-    #     [0.45, 0.06, -0.035],
-    #     [0.45, -0.07, -0.035],
-    #     # back
-    #     [-0.45, 0.05, 0.05],
-    #     [-0.45, -0.05, 0.05],
-    #     # left
-    #     [0.13, 0.14, 0.01],
-    #     [-0.13, 0.14, -0.01],
-    #     # right
-    #     [0.1, -0.15, -0.01],
-    #     [-0.13, -0.14, -0.01],
-    #     # top
-    #     [0.1, 0.05, 0.09],
-    #     [-0.12, -0.01, 0.09],
-    # ]
-    # # LEFT: 24
-    # for i in range(8):
+    total_mesh = o3d.geometry.TriangleMesh()
+    for mesh in robot_meshes:
+       total_mesh += mesh
+    # FRANKA
+    # x: 0.05 (-0.03 ~ 0.08) y: 0.02 (-0.005 ~ 0.05) -- sides, z: 0.5 (0.14 ~ 0.98) --height
+    # Joint 1: 20
+    theta = [np.pi/3 * i for i in range(6)]
+    markers_pos = [[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.17] for t in theta]
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.22] for t in theta])
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.27] for t in theta][0:1]
+                       + [[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.27] for t in theta][3:])
+    markers_pos.extend([[np.cos(t) * 0.05, -0.08, 0.34 + np.sin(t) * 0.05] for t in theta][0:4])
+    # Joint 2: 18
+    markers_pos.extend([[np.cos(t) * 0.05, 0.08, 0.34 + np.sin(t) * 0.05] for t in theta])
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.44] for t in theta])
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.5] for t in theta])
+    # Joint 3: 12
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.56] for t in theta])
+    markers_pos.extend([[0.07 + np.cos(t) * 0.05, 0.05, 0.65 + np.sin(t) * 0.05] for t in theta])
+    # Joint 4: 12
+    markers_pos.extend([[0.07 + np.cos(t) * 0.05, -0.05, 0.65 + np.sin(t) * 0.05] for t in theta])
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.73] for t in theta])
+    # Joint 5: 23
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.8] for t in theta])
+    markers_pos.extend([[np.cos(t) * 0.05, np.sin(t) * 0.05, 0.85] for t in theta])
+    markers_pos.extend([[np.cos(t) * 0.05, 0.07 + np.sin(t) * 0.05, 0.91] for t in theta][0:1]
+                        + [[np.cos(t) * 0.05, 0.07 + np.sin(t) * 0.05, 0.91] for t in theta][3:4]
+                        + [[np.cos(t + np.pi/6) * 0.05, 0.07 + np.sin(t+np.pi/6) * 0.05, 0.91] for t in theta][4:5])
+    markers_pos.extend([[np.cos(t) * 0.05, 0.07 + np.sin(t) * 0.05, 0.96] for t in theta][0:1]
+                        + [[np.cos(t) * 0.05, 0.07 + np.sin(t) * 0.05, 0.96] for t in theta][3:4])
+    markers_pos.extend([[np.cos(t) * 0.05, 0.06, 1.04 + np.sin(t) * 0.05] for t in theta])
+    # Joint 6: 15
+    markers_pos.extend([[np.cos(t) * 0.05, -0.02, 1.04 + np.sin(t) * 0.05] for t in theta])
+    markers_pos.extend([[0.09 + np.cos(t) * 0.05, np.sin(t) * 0.05, 1.08] for t in theta][:3]
+                       + [[0.09 + np.cos(t) * 0.05, np.sin(t) * 0.05, 1.08] for t in theta][4:])
+    markers_pos.extend([[0.07 + np.cos(t) * 0.05, np.sin(t) * 0.05, 1.01] for t in theta][:2]
+                       + [[0.07 + np.cos(t) * 0.05, np.sin(t) * 0.05, 1.01] for t in theta][4:])
+    markers_pos = np.array(markers_pos)
+    num_points = 10000
+    markers_pos, pos_indices = find_closest_vertices(total_mesh, markers_pos, num_points)
+    markers = create_red_markers(markers_pos, radius=0.02)
+    selected_idx = [6, 27, 40, 59, 76, 92]
+    selected_markers = [markers[i] for i in selected_idx]
+    markers_pos = markers_pos[selected_idx]
+    o3d.visualization.draw_geometries(robot_meshes + selected_markers)
+
+
+
+    # # SPOT
+    # markers_pos = [[0.45, 0.06, -0.035],[0.45, -0.07, -0.035], # front
+    #                [-0.45, 0.05, 0.05],[-0.45, -0.05, 0.05], # back
+    #                [0.13, 0.14, 0.01], [-0.13, 0.14, -0.01], # left
+    #                [0.1, -0.15, -0.01], [-0.13, -0.14, -0.01], # right
+    #                [0.1, 0.05, 0.09], [-0.12, -0.01, 0.09],] # top
+    # for i in range(8): # LEFT: 24
     #     x = -0.2 + i / 8 * (0.25 - (-0.2))
     #     for j in range(3):
     #         z = -0.04 + j / 3 * (0.1 - (-0.04))
     #         markers_pos.append([x, 0.105, z])
-    # # RIGHT: 24
-    # for i in range(8):
+    # for i in range(8): # RIGHT: 24
     #     x = -0.2 + i / 8 * (0.25 - (-0.2))
     #     for j in range(3):
     #         z = -0.04 + j / 3 * (0.1 - (-0.04))
     #         markers_pos.append([x, -0.105, z])
-    # # TOP: 24
-    # for i in range(6):
+    # for i in range(6):  # TOP: 24
     #     x = -0.37 + i / 6 * (0.04 - (-0.37))
     #     for j in range(3):
     #         y = -0.04 + j/3 * (0.08 - (-0.04))
     #         markers_pos.append([x, y, 0.08])
-    # markers_pos.append([-0.2, 0.08, 0.08])
-    # markers_pos.append([-0.12, 0.08, 0.08])
-    # markers_pos.append([0.01, 0.08, 0.08])
-    # markers_pos.append([-0.2, -0.07, 0.08])
-    # markers_pos.append([0.01, -0.07, 0.08])
-    # markers_pos.append([0.1, -0.07, 0.08])
-    # # FRONT: 8
-    # for i in range(4):
+    # markers_pos.extend([[-0.2, 0.08, 0.08], [-0.12, 0.08, 0.08], [0.01, 0.08, 0.08], [-0.2, -0.07, 0.08], [0.01, -0.07, 0.08], [0.1, -0.07, 0.08]])
+    # for i in range(4): # FRONT: 8
     #     y = -0.07 + i / 4 * (0.11 - (-0.07))
     #     markers_pos.append([0.39, y, -0.07])
     #     markers_pos.append([0.44, y, 0.04])
-    # # BACK: 10
-    # for i in range(4):
+    # for i in range(4):  # BACK: 10
     #     y = -0.07 + i / 4 * (0.11 - (-0.07))
     #     markers_pos.append([-0.40, y, -0.06])
     #     markers_pos.append([-0.42, y, 0.04])
-    # markers_pos.append([-0.42, -0.07, -0.01])
-    # markers_pos.append([-0.42, 0.07, -0.01])
-    # markers_pos = np.array(markers_pos)
-    # num_points = 10000
-    # markers_pos, pos_indices = find_closest_vertices(robot_meshes[0], markers_pos, num_points)
+    # markers_pos.extend([[-0.42, -0.07, -0.01], [-0.42, 0.07, -0.01]])
+
+
     # np.savetxt(markers_path, markers_pos, delimiter=",", comments="")
-    markers_pos = np.loadtxt(markers_path, delimiter=",")
-    print("Loaded markers positions: ", markers_pos)
-    print(f"Total number of markers: {len(markers_pos)}")
-    # markers = create_red_markers(markers_pos, radius=0.02)
-    # o3d.visualization.draw_geometries(robot_meshes + markers[82:90])
-    # sys.exit()
+    # markers_pos = np.loadtxt(markers_path, delimiter=",")
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
-    print(f"marker positions: {marker_positions}")
-    # print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
-    # collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration=20)
-    # os.makedirs("data/test1203", exist_ok=True)
+    print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
+    collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration=20)
     vertices = np.asarray(robot_meshes[0].vertices)
     robot_meshes[0].compute_vertex_normals()
 
     for idx, pos in marker_positions.items():
-        if 1 < int(idx) < 82 or int(idx) > 89:
-            continue
-        # if int(idx) < 85:
-            # continue
-
         distances = np.linalg.norm(vertices - pos, axis=1)
         index = np.argmin(distances)
 
         normal_at_vertex = robot_meshes[0].vertex_normals[index]
         distance = 2.0
-        # camera_position = pos - distance * normal_at_vertex
-        # forward_vector = pos - camera_position
-        # if np.dot(up_vector, forward_vector) > 0.99:  # Too parallel
-        #     up_vector = np.array([1.0, 0.0, 0.0])
-
 
         # Create marker for current position
         marker = create_red_markers([pos], radius=0.02)[0]
@@ -208,8 +201,6 @@ def main():
         print(f"Viewing marker {idx} . Press Ctrl+C in terminal to proceed to next view.")
         
         # Visualize with specific camera view
-        # front = pos - camera_position
-        # front /= np.linalg.norm(front)
         up = np.array([0.0, 0.0, 1.0])
         marker_idx = int(idx)
         if marker_idx < 2 or 81 < marker_idx < 90:
@@ -237,10 +228,7 @@ def main():
         
         
 
-    
 
 
 if __name__ == '__main__':
     main()
-    # if not main(output_path):
-    #     sys.exit(1)
