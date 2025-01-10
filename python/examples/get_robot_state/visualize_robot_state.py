@@ -588,7 +588,7 @@ def compute_forward_kinematics(robot, joint_positions):
 
     return link_transforms
 
-def prepare_trimesh_fk(robot, link_fk_transforms):
+def prepare_trimesh_fk(robot, link_fk_transforms, folder = None):
     """
     Prepare trimesh objects and their transforms for convert_trimesh_to_open3d.
     Returns a dictionary with trimesh objects as keys and FK transforms as values.
@@ -601,13 +601,24 @@ def prepare_trimesh_fk(robot, link_fk_transforms):
             if visual.geometry.mesh:
                 # Load the mesh
                 mesh_file = visual.geometry.mesh.filename
-                mesh = trimesh.load(os.path.join(folder_path, 'spot_description', mesh_file), force='mesh')
+                mesh = trimesh.load(os.path.join(folder_path, folder, mesh_file), force='mesh')
                 if hasattr(mesh.visual, 'material'):
                     mesh.visual.material.alpha = 1.0  # Fully opaque
 
                 # Convert to opaque vertex colors if no material
                 if hasattr(mesh.visual, 'to_color'):
                     mesh.visual = mesh.visual.to_color()
+                    num_vertices = mesh.vertices.shape[0]
+                    if mesh.visual.vertex_colors.ndim == 1:
+                        # If vertex_colors is 1-dimensional, expand it
+                        vertex_colors = np.tile(mesh.visual.vertex_colors, (num_vertices, 1))
+                        vertex_colors = vertex_colors.reshape(-1, 4)  # Ensure correct shape
+                        mesh.visual.vertex_colors = vertex_colors
+
+                    print(f"Type: {type(mesh.visual.vertex_colors)}")
+                    print(f"Shape: {mesh.visual.vertex_colors.shape}")
+                    print(f"Dimensions: {mesh.visual.vertex_colors.ndim}")
+                    print(f"First few elements: {mesh.visual.vertex_colors[:5]}")
                     mesh.visual.vertex_colors[:, 3] = 255  # Fully opaque
                 # Assign the FK transform
                 transform = link_fk_transforms[link.name]
