@@ -11,19 +11,24 @@ from urdfpy import URDF
 import matplotlib.pyplot as plt
 # import tensorflow as tf
 # from tensorflow.keras.models import load_model
-from src.utils.visualizer import SpotVisualizer
-from src.utils.helpers import sample_points_from_mesh
-from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
-from visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
+
 
 import torch
 from network import LitSpot
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(current_dir, '..'))
+
+from src.utils.visualizer import SpotVisualizer
+from src.utils.helpers import sample_points_from_mesh
+from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
+from src.utils.visualize_robot_state import update_meshes_with_fk, combine_meshes_o3d, create_red_markers, compute_forward_kinematics, find_closest_vertices, load_joint_torques, prepare_trimesh_fk, convert_trimesh_to_open3d
+
 from bosdyn.api.spot import choreography_sequence_pb2
 from bosdyn.client import create_standard_sdk
 from bosdyn.choreography.client.choreography import (ChoreographyClient,
                                                      load_choreography_sequence_from_txt_file)
 from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
-# from bosdyn.api.lease_pb2 import Lease
 from bosdyn.api import lease_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from bosdyn.api import header_pb2
@@ -32,8 +37,6 @@ from bosdyn.client.exceptions import UnauthenticatedError
 from bosdyn.client.license import LicenseClient
 
 
-# from bosdyn.api.spot.lease_pb2
-sys.exit()
 
 def collect_realtime_data(robot_state_client, duration=2):
     """
@@ -231,6 +234,7 @@ def main():
 
     # Get lease client and take control
     lease_client = robot.ensure_client(LeaseClient.default_service_name)
+    sys.exit()
     lease = lease_client.take()
     lk = LeaseKeepAlive(lease_client)
 

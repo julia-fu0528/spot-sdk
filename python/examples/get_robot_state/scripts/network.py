@@ -10,7 +10,6 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score, confusion_matrix
 
-sys.exit()
 class JointNetwork(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, classify) -> None:
         super().__init__()

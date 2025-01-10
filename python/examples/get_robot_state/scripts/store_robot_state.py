@@ -16,9 +16,14 @@ from bosdyn.client.robot_state import RobotStateClient
 from urdfpy import URDF
 import open3d as o3d
 import random
+from pathlib import Path
+
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(current_dir, '..'))
 
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera, look_at
-from visualize_robot_state import find_closest_vertices, add_red_dots, compute_forward_kinematics, prepare_trimesh_fk, \
+from src.utils.visualize_robot_state import find_closest_vertices, add_red_dots, compute_forward_kinematics, prepare_trimesh_fk, \
 convert_trimesh_to_open3d, create_red_markers, visualize_robot_with_markers, combine_meshes_o3d
 
 
@@ -91,11 +96,12 @@ def main():
     robot_type = options.robot_type
     duration = options.duration
     os.makedirs(output_dir, exist_ok=True)
-
-    robot = URDF.load(f'{robot_type}_description/{robot_type}.urdf')
+    
+    folder_path =  os.path.join(Path(__file__).parent.parent, f'{robot_type}_description')
+    robot = URDF.load(os.path.join(folder_path, f'{robot_type}.urdf'))
     joint_positions = {joint.name: 0.0 for joint in robot.joints}  # Zero configuration
     link_fk_transforms = compute_forward_kinematics(robot, joint_positions)
-    trimesh_fk, _ = prepare_trimesh_fk(robot, link_fk_transforms, folder=f"{robot_type}_description")
+    trimesh_fk, _ = prepare_trimesh_fk(robot, link_fk_transforms, folder=folder_path)
     robot_meshes, _ = convert_trimesh_to_open3d(trimesh_fk)
     total_mesh = o3d.geometry.TriangleMesh()
     for mesh in robot_meshes:

@@ -7,6 +7,7 @@ from pathlib import Path
 from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+
 from network import LitSpot
 from dataset import SpotDataModule
 
@@ -43,7 +44,6 @@ def main(num_classes, markers_path, classify, seq):
 
 
 if __name__ == "__main__":
-    sys.exit()
 
     parser = argparse.ArgumentParser()
 
