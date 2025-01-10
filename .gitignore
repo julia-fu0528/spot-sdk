@@ -1,7 +1,7 @@
 my_spot_env/*
-python/get_robot_state/spot_description/*
-python/get_robot_state/franka_description/meshes/*
+get_robot_state/spot_description/*
+get_robot_state/franka_description/meshes/*
 *.npy
-python/get_robot_state/data/*
-python/get_robot_state/preprocessed_data/*
-python/get_robot_state/gouger_logs/*
+get_robot_state/data/*
+get_robot_state/preprocessed_data/*
+get_robot_state/gouger_logs/*
