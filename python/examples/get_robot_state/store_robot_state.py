@@ -5,7 +5,6 @@
 # Development Kit License (20191101-BDSDK-SL).
 
 """Simple robot state capture tutorial."""
-
 import sys
 import time
 import json
@@ -180,7 +179,7 @@ def main():
 
 
     # np.savetxt(markers_path, markers_pos, delimiter=",", comments="")
-    # markers_pos = np.loadtxt(markers_path, delimiter=",")
+    markers_pos = np.loadtxt(markers_path, delimiter=",")
     marker_positions = {f"{i}": pos for i, pos in enumerate(markers_pos)}
     print("DON'T TOUCH YET! COLLECTING NO CONTACT DATA")
     collect_data(os.path.join(output_dir, f"no_contact.npy"), hostname, command, duration=20)

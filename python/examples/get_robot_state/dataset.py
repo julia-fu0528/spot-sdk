@@ -19,10 +19,9 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
-
 from visualize_robot_state import load_joint_torques, load_joint_positions
+print(f"hi")
 
-sys.exit()
 class JointLabel:
     def __init__(self, torque_dir, markers_path, classify) -> None:
         self.torque_dir = torque_dir
@@ -178,6 +177,7 @@ class SpotDataModule(L.LightningDataModule):
             pin_memory=True)
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--session', type = str, required=True, help='Session for data collection')

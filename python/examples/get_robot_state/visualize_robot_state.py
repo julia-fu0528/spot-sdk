@@ -21,7 +21,6 @@ import open3d as o3d
 from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 
-sys.exit()
 # from pykdl_utils.kdl_kinematics import KDLKinematics
 def load_joint_torques(torque_path):
     # load the npy data
@@ -697,10 +696,9 @@ def update_joints(joint_pos_path):
 
 
 if __name__ == "__main__":
+
     load_joint_torques("data/gouger1209/stand_h2/67.npy")
-    sys.exit()
     update_joints("data/gouger1209/stand_h2/67.npy")
-    sys.exit()
     # vis_joint_torques(torque_path2)
     vis_joint_torques(["data/gouger1209/stand_h2/67.npy"])
     # all directories in data/gouger1209
