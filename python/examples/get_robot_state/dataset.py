@@ -22,6 +22,7 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 
 from visualize_robot_state import load_joint_torques, load_joint_positions
 
+sys.exit()
 class JointLabel:
     def __init__(self, torque_dir, markers_path, classify) -> None:
         self.torque_dir = torque_dir

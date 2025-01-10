@@ -10,7 +10,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from network import LitSpot
 from dataset import SpotDataModule
 
-
+sys.exit()
 def main(num_classes, markers_path, classify, seq):
     seed_everything(42)
 

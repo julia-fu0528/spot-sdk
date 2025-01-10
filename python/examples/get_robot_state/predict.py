@@ -33,7 +33,7 @@ from bosdyn.client.license import LicenseClient
 
 
 # from bosdyn.api.spot.lease_pb2
-
+sys.exit()
 
 def collect_realtime_data(robot_state_client, duration=2):
     """

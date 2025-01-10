@@ -2,14 +2,5 @@ my_spot_env/*
 python/examples/get_robot_state/spot_description/*
 python/examples/get_robot_state/franka_description/meshes/*
 *.npy
-python/examples/get_robot_state/logs/*
-python/examples/get_robot_state/log/*
-python/examples/get_robot_state/model/*
-python/examples/get_robot_state/vis/*
 python/examples/get_robot_state/data/*
 python/examples/get_robot_state/preprocessed_data/*
-python/examples/get_robot_state/gouger_logs/*
-python/examples/get_robot_state/classify/*
-python/examples/get_robot_state/classification/*
-python/examples/get_robot_state/regression/*
-python/examples/gouger_logs/*

@@ -21,6 +21,7 @@ import open3d as o3d
 from src.utils.helpers import sample_points_from_mesh
 from src.utils.visualize_mesh import create_viewing_parameters, visualize_with_camera
 
+sys.exit()
 # from pykdl_utils.kdl_kinematics import KDLKinematics
 def load_joint_torques(torque_path):
     # load the npy data
