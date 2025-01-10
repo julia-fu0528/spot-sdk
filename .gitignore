@@ -1,5 +1,6 @@
 my_spot_env/*
 python/examples/get_robot_state/spot_description/*
+python/examples/get_robot_state/franka/meshes/*
 *.npy
 python/examples/get_robot_state/logs/*
 python/examples/get_robot_state/log/*
